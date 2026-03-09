@@ -47,7 +47,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
 
       - name: Install Fyne CLI
-        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+        run: go install fyne.io/tools/cmd/fyne@latest
 
       - name: Extract Version
         id: get_version
@@ -73,7 +73,7 @@ jobs:
           if [ "${{ matrix.goos }}" == "android" ]; then
             fyne package -release -icon assets/icon.png -appVersion ${{ env.VERSION }} -appID com.locon213.mimicapp -name MimicClient -os android
           else
-            fyne package -release -icon assets/icon.png -appVersion ${{ env.VERSION }} -name MimicClient -os ${{ matrix.goos }}
+            fyne package -release -icon assets/icon.png -appVersion ${{ env.VERSION }} -appID com.locon213.mimicapp -name MimicClient -os ${{ matrix.goos }}
           fi
         if: runner.os != 'Windows'
         
@@ -82,7 +82,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          fyne package -release -icon assets/icon.png -appVersion ${{ env.VERSION }} -name MimicClient.exe -os ${{ matrix.goos }}
+          fyne package -release -icon assets/icon.png -appVersion ${{ env.VERSION }} -appID com.locon213.mimicapp -name MimicClient.exe -os ${{ matrix.goos }}
         if: runner.os == 'Windows'
 
       - name: Prepare Artifact

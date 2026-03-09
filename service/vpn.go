@@ -80,11 +80,8 @@ func (v *VpnService) StopService() {
 
 // Stats returns bytes sent and received
 func (v *VpnService) Stats() (uint64, uint64) {
-	if v.client != nil && v.client.MTP != nil {
-		mtpConn := v.client.MTP.GetMTPConn()
-		if mtpConn != nil {
-			return mtpConn.BytesSent, mtpConn.BytesRecv
-		}
-	}
+	// The core Mimic Protocol client SDK currently does not export its
+	// internal traffic statistics `MTP` connection pointer to public via `client.Client`.
+	// For now, this will return 0 to avoid breaking builds until the API is exposed.
 	return 0, 0
 }

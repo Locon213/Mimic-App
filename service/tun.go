@@ -4,11 +4,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/xjasonlyu/tun2socks/v2/core/device/tun"
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
-var tunDevice tun.Device
+// tunDevice is handled internally by engine.
 
 // StartTun2Socks starts tun2socks tunneling to the local Mimic SOCKS5 proxy.
 func StartTun2Socks() error {
@@ -26,7 +25,10 @@ func StartTun2Socks() error {
 	os.Setenv("TUN2SOCKS_LOGLEVEL", "info")
 
 	go func() {
-		engine.Start(key)
+		// v2 engine.Start() accepts no arguments.
+		// The key must be passed to Insert first.
+		engine.Insert(key)
+		engine.Start()
 	}()
 
 	return nil
