@@ -68,7 +68,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           if [ "${{ matrix.goos }}" == "android" ]; then
-            fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os android -androidAPI 30
+            fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os android 
           else
             fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os ${{ matrix.goos }}
           fi
