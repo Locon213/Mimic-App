@@ -104,6 +104,9 @@ jobs:
 
       - name: Prepare Artifact
         run: |
+          echo "Files in current directory:"
+          ls -la
+          
           if [ "${{ runner.os }}" == "Windows" ]; then
             mv MimicClient.exe ${{ matrix.artifact_name }}
           elif [ "${{ matrix.goos }}" == "android" ]; then
@@ -111,7 +114,15 @@ jobs:
           elif [ "${{ runner.os }}" == "macOS" ]; then
             tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient.app
           else
-            tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient
+            # Linux - find and tar the binary
+            find . -name "MimicClient" -type f -executable
+            BINARY=$(find . -name "MimicClient" -type f -executable | head -1)
+            if [ -n "$BINARY" ]; then
+              tar -czvf ${{ matrix.artifact_name }}.tar.gz "$BINARY"
+            else
+              # Fallback: try without executable flag
+              tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient 2>/dev/null || echo "Warning: MimicClient binary not found"
+            fi
           fi
         shell: bash
 
