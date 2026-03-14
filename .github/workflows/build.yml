@@ -38,6 +38,16 @@ jobs:
         with:
           go-version: '1.25'
 
+      - name: Install ImageMagick (for icon generation)
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+        if: runner.os == 'Linux'
+
+      - name: Generate Icons from 1024x1024 source
+        run: |
+          chmod +x scripts/generate-icons.sh
+          ./scripts/generate-icons.sh
+        if: runner.os == 'Linux'
+
       - name: Set up Fyne dependencies (Linux only)
         if: runner.os == 'Linux' && matrix.goos != 'android'
         run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
@@ -45,18 +55,25 @@ jobs:
       - name: Install Fyne CLI
         run: go install fyne.io/tools/cmd/fyne@latest
 
+      - name: Install Mobile Targets (Android)
+        if: matrix.goos == 'android'
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile init
+
       - name: Build Application
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           if [ "${{ matrix.goos }}" == "android" ]; then
-            fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os android
+            fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os android -androidAPI 30
           else
             fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os ${{ matrix.goos }}
           fi
         if: runner.os != 'Windows'
-        
+
       - name: Build Application (Windows)
         env:
           GOOS: ${{ matrix.goos }}
@@ -74,7 +91,7 @@ jobs:
           elif [ "${{ runner.os }}" == "macOS" ]; then
             tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient.app
           else
-            tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient.tar.xz
+            tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient
           fi
         shell: bash
 
