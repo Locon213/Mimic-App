@@ -106,7 +106,10 @@ func createMainUI() *fyne.Container {
 	statusDot := canvas.NewCircle(theme.Color(theme.ColorNameError))
 	statusDot.Resize(fyne.NewSize(12, 12))
 	connectionStatus = widget.NewRichTextWithText("Disconnected")
-	connectionStatus.Segments[0].(*widget.TextSegment).Style.Color = theme.Color(theme.ColorNameError)
+	connectionStatus.Segments[0].(*widget.TextSegment).Style = widget.RichTextStyle{
+		Inline:    true,
+		TextStyle: fyne.TextStyle{},
+	}
 	statusBox := container.NewHBox(statusDot, connectionStatus)
 
 	// Stats Display
@@ -133,7 +136,7 @@ func createMainUI() *fyne.Container {
 	)
 
 	// Servers List Tab
-	serversList = createServersList()
+	serversTab := createServersList()
 
 	// Settings Tab
 	settingsTab := createSettingsTab()
@@ -144,18 +147,18 @@ func createMainUI() *fyne.Container {
 	// Main Tabs
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon("Connect", theme.MediaPlayIcon(), connectionPanel),
-		container.NewTabItemWithIcon("Servers", theme.FolderIcon(), serversList),
+		container.NewTabItemWithIcon("Servers", theme.FolderIcon(), serversTab),
 		container.NewTabItemWithIcon("Settings", theme.SettingsIcon(), settingsTab),
 		container.NewTabItemWithIcon("About", theme.InfoIcon(), aboutTab),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
 
-	return tabs
+	return container.NewStack(tabs)
 }
 
-func createServersList() *fyne.Container {
+func createServersList() fyne.CanvasObject {
 	// Server List
-	serversList = widget.NewList(
+	list := widget.NewList(
 		func() int { return len(savedServers) },
 		func() fyne.CanvasObject {
 			return container.NewHBox(
@@ -191,7 +194,7 @@ func createServersList() *fyne.Container {
 		container.NewVBox(layout.NewSpacer(), addServerBtn),
 		nil,
 		nil,
-		serversList,
+		list,
 	)
 
 	return serversPanel
@@ -245,7 +248,7 @@ func createSettingsTab() *fyne.Container {
 	})
 	clearDataBtn.Importance = widget.DangerImportance
 
-	settingsContent := container.NewVBox(
+	return container.NewVBox(
 		widget.NewLabelWithStyle("Network Settings", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewLabel("DNS Server:"),
 		dnsEntry,
@@ -264,11 +267,9 @@ func createSettingsTab() *fyne.Container {
 		layout.NewSpacer(),
 		clearDataBtn,
 	)
-
-	return container.NewScroll(settingsContent)
 }
 
-func createAboutTab() *fyne.Container {
+func createAboutTab() fyne.CanvasObject {
 	versionLabel := widget.NewLabel("Version 2.0.0")
 	versionLabel.TextStyle = fyne.TextStyle{Bold: true}
 	versionLabel.Alignment = fyne.TextAlignCenter
@@ -292,8 +293,8 @@ func createAboutTab() *fyne.Container {
 	)
 
 	aboutContent := container.NewVBox(
-		widget.NewIcon(theme.SoftwareIcon()),
-		widget.NewLabelWithStyle("Mimic VPN Client", fyne.TextAlignCenter, fyne.TextStyle{Bold: true, SizeName: theme.SizeNameHeadingText}),
+		widget.NewIcon(theme.FyneLogo()),
+		widget.NewLabelWithStyle("Mimic VPN Client", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
 		versionLabel,
 		sdkVersion,
 		layout.NewSpacer(),
@@ -411,9 +412,9 @@ func toggleConnection() {
 func updateConnectionStatus(status string, connected bool) {
 	connectionStatus.Segments[0].(*widget.TextSegment).Text = status
 	if connected {
-		connectionStatus.Segments[0].(*widget.TextSegment).Style.Color = theme.Color(theme.ColorNameSuccess)
+		connectionStatus.Segments[0].(*widget.TextSegment).Style = widget.RichTextStyleStrong
 	} else {
-		connectionStatus.Segments[0].(*widget.TextSegment).Style.Color = theme.Color(theme.ColorNameError)
+		connectionStatus.Segments[0].(*widget.TextSegment).Style = widget.RichTextStyleInline
 	}
 	connectionStatus.Refresh()
 }
