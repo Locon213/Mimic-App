@@ -7,12 +7,14 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/Locon213/Mimic-App/android"
 	"github.com/Locon213/Mimic-Protocol/pkg/client"
 	"github.com/Locon213/Mimic-Protocol/pkg/config"
 )
+
+// VpnService provides VPN service functionality
 
 type VpnService struct {
 	mu              sync.RWMutex
@@ -24,18 +26,21 @@ type VpnService struct {
 	statsCallback   func(client.NetworkStats)
 	serverName      string
 	serverAddress   string
-	notifService    *android.NotificationService
 	statsTicker     *time.Ticker
 	statsTickerDone chan struct{}
+	isRunning       atomic.Bool
 }
 
 func NewVpnService() *VpnService {
-	return &VpnService{
-		notifService: android.GetNotificationService(),
-	}
+	return &VpnService{}
 }
 
 func (v *VpnService) StartService(serverUrl string, mode string) error {
+	// Check if already running
+	if v.isRunning.Load() {
+		return errors.New("service is already running")
+	}
+
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -45,7 +50,7 @@ func (v *VpnService) StartService(serverUrl string, mode string) error {
 
 	cfg, err := config.ParseMimicURL(serverUrl)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse server URL: %w", err)
 	}
 
 	// Extract server name from URL (after #)
@@ -61,56 +66,85 @@ func (v *VpnService) StartService(serverUrl string, mode string) error {
 
 	mimicClient, err := client.NewClient(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	v.client = mimicClient
+	// Initialize context first
 	v.ctx, v.cancel = context.WithCancel(context.Background())
 	v.mode = mode
+	v.client = mimicClient
+	v.isRunning.Store(true)
 
 	// Set traffic callback for real-time stats
+	// Use a wrapper to prevent race conditions
 	mimicClient.SetTrafficCallback(func(stats client.NetworkStats) {
+		// Safely update stats
 		v.mu.Lock()
 		v.lastStats = stats
 		v.mu.Unlock()
 
-		// Update Android notification with new stats
-		v.updateNotification(stats)
+		// Call external callback if set
+		v.mu.RLock()
+		callback := v.statsCallback
+		v.mu.RUnlock()
 
-		if v.statsCallback != nil {
-			v.statsCallback(stats)
+		if callback != nil {
+			// Recover from potential panic in callback
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Panic in stats callback: %v\n", r)
+				}
+			}()
+			callback(stats)
 		}
 	})
 
+	// Start client connection
 	if err := v.client.Start(v.ctx); err != nil {
-		return err
+		v.cleanup()
+		return fmt.Errorf("failed to start client: %w", err)
 	}
 
+	// Start proxies
 	if err := v.client.StartProxies(); err != nil {
 		v.client.Stop()
-		return err
+		v.cleanup()
+		return fmt.Errorf("failed to start proxies: %w", err)
 	}
 
+	// Start TUN if needed
 	if strings.Contains(mode, "TUN") {
 		log.Println("TUN mode selected. Starting tun2socks...")
 		err := StartTun2Socks()
 		if err != nil {
 			log.Printf("Failed to start TUN network: %v\n", err)
+			v.client.Stop()
+			v.cleanup()
 			return errors.New("failed to start TUN network (try running as Administrator): " + err.Error())
 		}
 	}
 
-	// Show Android notification after successful connection
-	v.showConnectedNotification(v.lastStats)
+	// Initialize stats ticker
+	v.statsTickerDone = make(chan struct{})
+	v.statsTicker = time.NewTicker(1 * time.Second)
+	go v.statsLoop()
 
+	log.Printf("✅ Service started successfully, connected to %s", v.serverAddress)
 	return nil
 }
 
 func (v *VpnService) StopService() {
+	// Stop TUN first
 	StopTun2Socks()
+
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	v.cleanup()
+}
+
+// cleanup performs internal cleanup of resources
+func (v *VpnService) cleanup() {
 	// Stop stats ticker
 	if v.statsTicker != nil {
 		v.statsTicker.Stop()
@@ -121,18 +155,30 @@ func (v *VpnService) StopService() {
 		v.statsTickerDone = nil
 	}
 
-	// Hide Android notification
-	if v.notifService != nil {
-		v.notifService.Hide()
+	// Cancel context
+	if v.cancel != nil {
+		v.cancel()
+		v.cancel = nil
 	}
 
+	// Stop client
 	if v.client != nil {
 		v.client.Stop()
 		v.client = nil
 	}
-	if v.cancel != nil {
-		v.cancel()
-		v.cancel = nil
+
+	v.isRunning.Store(false)
+}
+
+// statsLoop periodically processes stats
+func (v *VpnService) statsLoop() {
+	for {
+		select {
+		case <-v.statsTicker.C:
+			// Periodic stats processing if needed
+		case <-v.statsTickerDone:
+			return
+		}
 	}
 }
 
@@ -240,35 +286,6 @@ func (v *VpnService) extractServerName(url string) string {
 		return hostPart[:endIdx]
 	}
 	return "Unknown Server"
-}
-
-// showConnectedNotification shows the Android system notification
-func (v *VpnService) showConnectedNotification(stats client.NetworkStats) {
-	if v.notifService == nil {
-		return
-	}
-
-	downloadSpeed := formatBytes(uint64(stats.DownloadSpeed)) + "/s"
-	uploadSpeed := formatBytes(uint64(stats.UploadSpeed)) + "/s"
-
-	v.notifService.ShowConnected(
-		v.serverName,
-		v.serverAddress,
-		downloadSpeed,
-		uploadSpeed,
-	)
-}
-
-// updateNotification updates the Android notification with new stats
-func (v *VpnService) updateNotification(stats client.NetworkStats) {
-	if v.notifService == nil {
-		return
-	}
-
-	downloadSpeed := formatBytes(uint64(stats.DownloadSpeed)) + "/s"
-	uploadSpeed := formatBytes(uint64(stats.UploadSpeed)) + "/s"
-
-	v.notifService.Update(v.serverName, downloadSpeed, uploadSpeed)
 }
 
 // formatBytes formats bytes to human readable string

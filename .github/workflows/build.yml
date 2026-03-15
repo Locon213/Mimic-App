@@ -1,34 +1,29 @@
-name: Build
+name: Build Flutter App
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main, master]
   pull_request:
-    branches: [ "main" ]
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+env:
+  FLUTTER_VERSION: '3.x'
+  GO_VERSION: '1.25'
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            artifact_name: MimicClient-Windows.exe
-            goos: windows
-            goarch: amd64
-          - os: ubuntu-latest
-            artifact_name: MimicClient-Linux
-            goos: linux
-            goarch: amd64
-          - os: macos-latest
-            artifact_name: MimicClient-macOS
-            goos: darwin
-            goarch: amd64
-          - os: ubuntu-latest
-            artifact_name: MimicClient-Android.apk
-            goos: android
-            goarch: arm64
-
+  # ============================================
+  # Build Go Mobile Libraries
+  # ============================================
+  build-mobile-libs:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -36,80 +31,288 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Install ImageMagick (for icon generation)
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-        if: runner.os == 'Linux'
-
-      - name: Generate Icons from 1024x1024 source
+      - name: Extract Version
+        id: get_version
         run: |
-          chmod +x scripts/generate-icons.sh
-          ./scripts/generate-icons.sh
-        if: runner.os == 'Linux'
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Set up Fyne dependencies (Linux only)
-        if: runner.os == 'Linux' && matrix.goos != 'android'
-        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
-
-      - name: Install Fyne CLI
-        run: go install fyne.io/tools/cmd/fyne@latest
-
-      - name: Install Mobile Targets (Android)
-        if: matrix.goos == 'android'
+      - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init
 
-      - name: Build Application
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+      - name: Build Android AAR
         run: |
-          if [ "${{ matrix.goos }}" == "android" ]; then
-            fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os android 
-          else
-            fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient -os ${{ matrix.goos }}
-          fi
-        if: runner.os != 'Windows'
+          chmod +x scripts/build-mobile.sh
+          ./scripts/build-mobile.sh
 
-      - name: Build Application (Windows)
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          fyne package -release -icon assets/icon.png --app-id com.locon213.mimicapp -name MimicClient.exe -os ${{ matrix.goos }}
-        if: runner.os == 'Windows'
-
-      - name: Prepare Artifact
-        run: |
-          echo "Files in current directory:"
-          ls -la
-          
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            mv MimicClient.exe ${{ matrix.artifact_name }}
-          elif [ "${{ matrix.goos }}" == "android" ]; then
-            mv MimicClient.apk ${{ matrix.artifact_name }}
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient.app
-          else
-            # Linux - find and tar the binary
-            find . -name "MimicClient" -type f -executable
-            BINARY=$(find . -name "MimicClient" -type f -executable | head -1)
-            if [ -n "$BINARY" ]; then
-              tar -czvf ${{ matrix.artifact_name }}.tar.gz "$BINARY"
-            else
-              # Fallback: try without executable flag
-              tar -czvf ${{ matrix.artifact_name }}.tar.gz MimicClient 2>/dev/null || echo "Warning: MimicClient binary not found"
-            fi
-          fi
-        shell: bash
-
-      - name: Upload Artifact
+      - name: Upload Android AAR
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            ${{ matrix.artifact_name }}
-            ${{ matrix.artifact_name }}.tar.gz
+          name: mimic-android-aar
+          path: mobile/libs/mimic.aar
+
+      - name: Upload iOS Framework
+        uses: actions/upload-artifact@v4
+        with:
+          name: mimic-ios-framework
+          path: mobile/libs/Mimic.xcframework
+
+  # ============================================
+  # Build Flutter Android App
+  # ============================================
+  build-flutter-android:
+    runs-on: ubuntu-latest
+    needs: build-mobile-libs
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Download Go Mobile Libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: mimic-android-aar
+          path: mimic_app/android/app/libs/
+
+      - name: Install gomobile for Flutter build
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+
+      - name: Build Go Mobile for Android
+        working-directory: .
+        run: |
+          chmod +x scripts/build-mobile.sh
+          ./scripts/build-mobile.sh
+          cp mobile/libs/mimic.aar mimic_app/android/app/libs/
+
+      - name: Install Flutter dependencies
+        working-directory: mimic_app
+        run: flutter pub get
+
+      - name: Build Android APK
+        working-directory: mimic_app
+        run: flutter build apk --release
+
+      - name: Build Android App Bundle
+        working-directory: mimic_app
+        run: flutter build appbundle --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MimicApp-Android.apk
+          path: mimic_app/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: MimicApp-Android.aab
+          path: mimic_app/build/app/outputs/bundle/release/app-release.aab
+
+  # ============================================
+  # Build Flutter iOS App
+  # ============================================
+  build-flutter-ios:
+    runs-on: macos-latest
+    needs: build-mobile-libs
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Download Go Mobile Libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: mimic-ios-framework
+          path: mimic_app/ios/Frameworks/
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+
+      - name: Build Go Mobile for iOS
+        working-directory: .
+        run: |
+          chmod +x scripts/build-mobile.sh
+          ./scripts/build-mobile.sh
+          cp mobile/libs/Mimic.xcframework mimic_app/ios/Frameworks/
+
+      - name: Install Flutter dependencies
+        working-directory: mimic_app
+        run: flutter pub get
+
+      - name: Build iOS IPA
+        working-directory: mimic_app
+        run: |
+          flutter build ios --release --no-codesign
+          # Create IPA from .app
+          mkdir -r Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -r MimicApp-iOS.ipa Payload
+
+      - name: Upload iOS IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MimicApp-iOS.ipa
+          path: MimicApp-iOS.ipa
+
+  # ============================================
+  # Build Flutter Windows App
+  # ============================================
+  build-flutter-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Enable Windows desktop support
+        run: flutter config --enable-windows-desktop
+
+      - name: Install Flutter dependencies
+        working-directory: mimic_app
+        run: flutter pub get
+
+      - name: Build Windows
+        working-directory: mimic_app
+        run: flutter build windows --release
+
+      - name: Create distribution package
+        working-directory: mimic_app
+        run: |
+          mkdir dist
+          cp build/windows/runner/Release/* dist/
+          cp -r build/windows/runner/Release/data/flutter_assets dist/
+          cp -r build/windows/runner/Release/data/icudtl.dat dist/
+        shell: bash
+
+      - name: Upload Windows App
+        uses: actions/upload-artifact@v4
+        with:
+          name: MimicApp-Windows.zip
+          path: mimic_app/dist/
+
+  # ============================================
+  # Build Flutter Linux App
+  # ============================================
+  build-flutter-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+
+      - name: Enable Linux desktop support
+        run: flutter config --enable-linux-desktop
+
+      - name: Install Flutter dependencies
+        working-directory: mimic_app
+        run: flutter pub get
+
+      - name: Build Linux
+        working-directory: mimic_app
+        run: flutter build linux --release
+
+      - name: Create distribution package
+        working-directory: mimic_app
+        run: |
+          mkdir dist
+          cp -r build/linux/x64/release/bundle/* dist/
+
+      - name: Upload Linux App
+        uses: actions/upload-artifact@v4
+        with:
+          name: MimicApp-Linux.tar.gz
+          path: mimic_app/dist/
+
+  # ============================================
+  # Build Flutter macOS App
+  # ============================================
+  build-flutter-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Enable macOS desktop support
+        run: flutter config --enable-macos-desktop
+
+      - name: Install Flutter dependencies
+        working-directory: mimic_app
+        run: flutter pub get
+
+      - name: Build macOS
+        working-directory: mimic_app
+        run: flutter build macos --release
+
+      - name: Create distribution package
+        working-directory: mimic_app
+        run: |
+          mkdir dist
+          cp -r build/macos/Build/Products/Release/MimicApp.app dist/
+
+      - name: Upload macOS App
+        uses: actions/upload-artifact@v4
+        with:
+          name: MimicApp-macOS.zip
+          path: mimic_app/dist/
