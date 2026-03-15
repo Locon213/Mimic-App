@@ -82,7 +82,7 @@ class ServerSelector extends StatelessWidget {
                   child: Row(
                     children: [
                       Icon(
-                        Icons.server_outlined,
+                        Icons.dns_outlined,
                         color: isDark
                             ? AppColors.textDarkSecondary
                             : AppColors.textSecondary,

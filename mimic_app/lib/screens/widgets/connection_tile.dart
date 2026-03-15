@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../providers/vpn_provider.dart';
+import '../../models/network_stats.dart';
 import '../../utils/app_theme.dart';
 
 /// Connection Tile - Large connect button with status indicator

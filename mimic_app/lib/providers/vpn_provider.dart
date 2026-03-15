@@ -9,7 +9,7 @@ import '../models/server_config.dart';
 /// will be added when gomobile bindings are generated.
 class VpnProvider extends ChangeNotifier {
   ConnectionStatus _status = ConnectionStatus.disconnected;
-  NetworkStats _stats = const NetworkStats();
+  NetworkStats _stats = NetworkStats();
   ServerConfig? _currentServer;
   String _mode = 'Proxy'; // 'Proxy' or 'TUN'
   String? _error;
@@ -64,7 +64,7 @@ class VpnProvider extends ChangeNotifier {
       // await _mimicClient.disconnect();
       
       _status = ConnectionStatus.disconnected;
-      _stats = const NetworkStats();
+      _stats = NetworkStats();
       notifyListeners();
       
     } catch (e) {

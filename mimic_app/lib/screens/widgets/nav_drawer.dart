@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../providers/server_provider.dart';
+import '../../models/network_stats.dart';
 import '../../utils/app_theme.dart';
 
 /// Navigation Drawer - Side menu with app navigation
