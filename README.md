@@ -32,18 +32,6 @@
 
 ---
 
-## 📸 Screenshots
-
-<div align="center">
-
-![Dark Theme](https://via.placeholder.com/300x600/0F172A/6366F1?text=Dark+Theme)
-![Light Theme](https://via.placeholder.com/300x600/F8FAFC/6366F1?text=Light+Theme)
-![Connection](https://via.placeholder.com/300x600/1E293B/10B981?text=Connected)
-
-</div>
-
----
-
 ## 🏗️ Architecture
 
 ```

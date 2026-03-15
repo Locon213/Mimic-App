@@ -7,7 +7,7 @@ class NetworkStats {
   final int totalUpload; // total bytes sent
   final DateTime lastUpdated;
 
-  const NetworkStats({
+  NetworkStats({
     this.downloadSpeed = 0,
     this.uploadSpeed = 0,
     this.ping = 0,

@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ),
-      drawer: const NavDrawer(),
+      drawer: NavDrawer(),
     );
   }
 
@@ -152,7 +152,6 @@ class _HomeScreenState extends State<HomeScreen>
             'Mimic VPN',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  gradient: AppColors.primaryGradient,
                 ),
           ),
           

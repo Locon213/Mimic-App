@@ -23,11 +23,11 @@ class ServerConfig {
     if (countryCode.isEmpty) return '🌐';
     final code = countryCode.toUpperCase();
     if (code.length != 2) return '🌐';
-    
+
     // Convert country code to flag emoji
     final firstChar = code.codeUnitAt(0) + 127397;
     final secondChar = code.codeUnitAt(1) + 127397;
-    return String.fromCharCode(firstChar, secondChar);
+    return String.fromCharCode(firstChar) + String.fromCharCode(secondChar);
   }
 
   /// Extract server name from URL if not provided
