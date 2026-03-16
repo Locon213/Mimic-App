@@ -13,7 +13,7 @@ import 'utils/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -40,7 +40,14 @@ class MimicApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => VpnProvider()),
-        ChangeNotifierProvider(create: (_) => ServerProvider()),
+        ChangeNotifierProvider(
+          create: (context) {
+            final serverProvider = ServerProvider();
+            // Load servers on initialization
+            serverProvider.loadServers();
+            return serverProvider;
+          },
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {

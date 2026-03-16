@@ -491,7 +491,14 @@ class _ServerListSheet extends StatelessWidget {
               ),
 
               // Server List
-              if (serverProvider.servers.isEmpty)
+              if (serverProvider.isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (serverProvider.servers.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(40),
                   child: Column(

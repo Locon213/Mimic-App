@@ -8,35 +8,68 @@ class ServerProvider extends ChangeNotifier {
   List<ServerConfig> _servers = [];
   ServerConfig? _selectedServer;
   bool _isLoading = false;
+  String? _loadError;
 
   // Getters
   List<ServerConfig> get servers => _servers;
   ServerConfig? get selectedServer => _selectedServer;
   bool get isLoading => _isLoading;
+  String? get loadError => _loadError;
   bool get hasServers => _servers.isNotEmpty;
+  bool get hasSelectedServer => _selectedServer != null;
 
   /// Load servers from storage
   Future<void> loadServers() async {
     _isLoading = true;
+    _loadError = null;
     notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final serversJson = prefs.getStringList('saved_servers') ?? [];
-      
+
+      debugPrint('Loading ${serversJson.length} saved servers');
+
       _servers = serversJson
-          .map((json) => ServerConfig.fromJson(jsonDecode(json)))
+          .map((json) {
+            try {
+              return ServerConfig.fromJson(jsonDecode(json));
+            } catch (e) {
+              debugPrint('Error parsing server: $e');
+              return null;
+            }
+          })
+          .whereType<ServerConfig>()
           .toList();
-      
+
       // Sort by last used (most recent first)
       _servers.sort((a, b) {
-        if (b.lastUsed == null) return -1;
-        if (a.lastUsed == null) return 1;
+        if (b.lastUsed == null && a.lastUsed == null) return 0;
+        if (b.lastUsed == null) return 1;
+        if (a.lastUsed == null) return -1;
         return b.lastUsed!.compareTo(a.lastUsed!);
       });
+
+      debugPrint('Loaded ${_servers.length} servers successfully');
+
+      // Restore selected server if any
+      if (_servers.isNotEmpty) {
+        final selectedId = prefs.getString('selected_server_id');
+        if (selectedId != null) {
+          _selectedServer = _servers.firstWhere(
+            (s) => s.id == selectedId,
+            orElse: () => _servers.first,
+          );
+        } else {
+          _selectedServer = _servers.first;
+        }
+        debugPrint('Selected server: ${_selectedServer?.displayName}');
+      }
     } catch (e) {
       debugPrint('Error loading servers: $e');
+      _loadError = e.toString();
       _servers = [];
+      _selectedServer = null;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -50,8 +83,9 @@ class ServerProvider extends ChangeNotifier {
       final serversJson = _servers
           .map((server) => jsonEncode(server.toJson()))
           .toList();
-      
+
       await prefs.setStringList('saved_servers', serversJson);
+      debugPrint('Saved ${_servers.length} servers');
     } catch (e) {
       debugPrint('Error saving servers: $e');
       rethrow;
@@ -60,9 +94,11 @@ class ServerProvider extends ChangeNotifier {
 
   /// Add a new server
   Future<void> addServer(ServerConfig server) async {
+    debugPrint('Adding server: ${server.displayName} (${server.url})');
     _servers.add(server);
     await saveServers();
     notifyListeners();
+    debugPrint('Server added, total: ${_servers.length}');
   }
 
   /// Update an existing server
@@ -72,24 +108,38 @@ class ServerProvider extends ChangeNotifier {
       _servers[index] = updatedServer;
       await saveServers();
       notifyListeners();
+    } else {
+      debugPrint('Server not found for update: ${updatedServer.id}');
     }
   }
 
   /// Delete a server
   Future<void> deleteServer(String serverId) async {
+    debugPrint('Deleting server: $serverId');
     _servers.removeWhere((s) => s.id == serverId);
-    
+
     if (_selectedServer?.id == serverId) {
-      _selectedServer = null;
+      _selectedServer = _servers.isNotEmpty ? _servers.first : null;
     }
-    
+
     await saveServers();
     notifyListeners();
+    debugPrint('Server deleted, remaining: ${_servers.length}');
   }
 
   /// Select a server
-  void selectServer(ServerConfig server) {
+  void selectServer(ServerConfig server) async {
+    debugPrint('Selecting server: ${server.displayName}');
     _selectedServer = server;
+    
+    // Save selected server ID
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_server_id', server.id);
+    } catch (e) {
+      debugPrint('Error saving selected server: $e');
+    }
+    
     notifyListeners();
   }
 
@@ -110,10 +160,11 @@ class ServerProvider extends ChangeNotifier {
       final importedServers = jsonList
           .map((json) => ServerConfig.fromJson(json))
           .toList();
-      
+
       _servers.addAll(importedServers);
       await saveServers();
       notifyListeners();
+      debugPrint('Imported ${importedServers.length} servers');
     } catch (e) {
       debugPrint('Error importing servers: $e');
       rethrow;
@@ -132,5 +183,10 @@ class ServerProvider extends ChangeNotifier {
     _selectedServer = null;
     await saveServers();
     notifyListeners();
+  }
+
+  /// Refresh - reload servers from storage
+  Future<void> refresh() async {
+    await loadServers();
   }
 }

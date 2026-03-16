@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/network_stats.dart' as models;
 import '../models/network_stats.dart';
 import '../models/server_config.dart';
-import '../services/mimic_sdk_service.dart';
+import '../services/android_vpn_client.dart';
 
 /// VPN Provider - Manages VPN connection state and statistics
 class VpnProvider extends ChangeNotifier {
@@ -13,7 +13,7 @@ class VpnProvider extends ChangeNotifier {
   ServerConfig? _currentServer;
   String _mode = 'TUN'; // Default to TUN
   String? _error;
-  final _mimicClient = MimicMobileClient.instance;
+  final _vpnClient = AndroidVpnClient.instance;
 
   // Getters
   ConnectionStatus get status => _status;
@@ -25,6 +25,9 @@ class VpnProvider extends ChangeNotifier {
   bool get isConnected => _status == ConnectionStatus.connected;
   bool get isConnecting => _status == ConnectionStatus.connecting;
   bool get isDisconnected => _status == ConnectionStatus.disconnected;
+
+  /// Check if running on Android
+  bool get isAndroid => !kIsWeb && Platform.isAndroid;
 
   /// Check if running on mobile platform
   bool get isMobilePlatform =>
@@ -49,20 +52,18 @@ class VpnProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Connect via Go Mobile SDK
-      await _mimicClient.connect(server.url, _mode);
+      // Connect via Android VpnService on Android
+      await _vpnClient.connect(
+        server.url,
+        _mode,
+        serverName: server.displayName,
+      );
 
       _status = ConnectionStatus.connected;
-      
+
       // Set stats callback
-      _mimicClient.setStatsCallback((sdkStats) {
-        _stats = models.NetworkStats(
-          downloadSpeed: sdkStats.downloadSpeed,
-          uploadSpeed: sdkStats.uploadSpeed,
-          ping: sdkStats.ping,
-          totalDownload: sdkStats.totalDownload,
-          totalUpload: sdkStats.totalUpload,
-        );
+      _vpnClient.setStatsCallback((stats) {
+        _stats = stats;
         notifyListeners();
       });
 
@@ -79,8 +80,8 @@ class VpnProvider extends ChangeNotifier {
   /// Disconnect from current server
   Future<void> disconnect() async {
     try {
-      // Disconnect via Go Mobile SDK
-      await _mimicClient.disconnect();
+      // Disconnect via VpnService
+      await _vpnClient.disconnect();
 
       _status = ConnectionStatus.disconnected;
       _stats = models.NetworkStats();
@@ -120,11 +121,14 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
-  /// Get current stats from SDK
-  models.NetworkStats get currentStats => _mimicClient.getStats();
+  /// Get current stats from VPN client
+  models.NetworkStats get currentStats => _vpnClient.getStats();
 
-  /// Get server name from SDK
-  String? get serverName => _mimicClient.getServerName();
+  /// Get server URL from VPN client
+  String? get serverUrl => _vpnClient.getServerUrl();
+
+  /// Get server name from VPN client
+  String? get serverName => _vpnClient.getServerName();
 
   @override
   void dispose() {
