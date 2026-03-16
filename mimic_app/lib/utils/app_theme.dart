@@ -271,13 +271,13 @@ class AppTheme {
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primaryStart;
+            return AppColors.primary;
           }
           return AppColors.textDarkSecondary;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primaryStart.withOpacity(0.5);
+            return AppColors.primary.withOpacity(0.5);
           }
           return AppColors.surfaceElevated;
         }),

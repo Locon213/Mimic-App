@@ -341,6 +341,108 @@ class _ServerCard extends StatelessWidget {
 class _ServerListSheet extends StatelessWidget {
   const _ServerListSheet();
 
+  void _showAddServerDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final urlController = TextEditingController();
+    final nameController = TextEditingController();
+    final countryController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          title: const Text('Add Server'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server URL',
+                    hintText: 'mimic://uuid@server:port?domains=example.com#Name',
+                    prefixIcon: Icon(Icons.link),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Name (optional)',
+                    hintText: 'My Server',
+                    prefixIcon: Icon(Icons.label),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: countryController,
+                  decoration: const InputDecoration(
+                    labelText: 'Country Code (optional)',
+                    hintText: 'US',
+                    prefixIcon: Icon(Icons.flag),
+                  ),
+                  maxLength: 2,
+                  textCapitalization: TextCapitalization.characters,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final url = urlController.text.trim();
+                if (url.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a server URL'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  final server = ServerConfig(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: nameController.text.trim(),
+                    url: url,
+                    countryCode: countryController.text.trim().toUpperCase(),
+                  );
+
+                  context.read<ServerProvider>().addServer(server);
+                  context.read<ServerProvider>().selectServer(server);
+
+                  Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Server added successfully'),
+                      backgroundColor: AppColors.connected,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ServerProvider>(

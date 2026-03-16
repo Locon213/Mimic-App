@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import '../models/network_stats.dart' as models;
+import '../models/network_stats.dart';
 import '../models/server_config.dart';
 import '../services/mimic_sdk_service.dart';
 
