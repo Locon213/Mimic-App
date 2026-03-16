@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
-import '../models/network_stats.dart';
+import '../models/network_stats.dart' as models;
 import '../models/server_config.dart';
 import '../services/mimic_sdk_service.dart';
 
 /// VPN Provider - Manages VPN connection state and statistics
 class VpnProvider extends ChangeNotifier {
   ConnectionStatus _status = ConnectionStatus.disconnected;
-  NetworkStats _stats = NetworkStats();
+  models.NetworkStats _stats = models.NetworkStats();
   ServerConfig? _currentServer;
   String _mode = 'TUN'; // Default to TUN
   String? _error;
@@ -16,7 +16,7 @@ class VpnProvider extends ChangeNotifier {
 
   // Getters
   ConnectionStatus get status => _status;
-  NetworkStats get stats => _stats;
+  models.NetworkStats get stats => _stats;
   ServerConfig? get currentServer => _currentServer;
   String get mode => _mode;
   String? get error => _error;
@@ -55,7 +55,7 @@ class VpnProvider extends ChangeNotifier {
       
       // Set stats callback
       _mimicClient.setStatsCallback((sdkStats) {
-        _stats = NetworkStats(
+        _stats = models.NetworkStats(
           downloadSpeed: sdkStats.downloadSpeed,
           uploadSpeed: sdkStats.uploadSpeed,
           ping: sdkStats.ping,
@@ -82,7 +82,7 @@ class VpnProvider extends ChangeNotifier {
       await _mimicClient.disconnect();
 
       _status = ConnectionStatus.disconnected;
-      _stats = NetworkStats();
+      _stats = models.NetworkStats();
       _currentServer = null;
       notifyListeners();
 
@@ -120,7 +120,7 @@ class VpnProvider extends ChangeNotifier {
   }
 
   /// Get current stats from SDK
-  NetworkStats get currentStats => _mimicClient.getStats();
+  models.NetworkStats get currentStats => _mimicClient.getStats();
 
   /// Get server name from SDK
   String? get serverName => _mimicClient.getServerName();

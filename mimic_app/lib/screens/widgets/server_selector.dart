@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/server_provider.dart';
@@ -99,42 +98,13 @@ class ServerSelector extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      PopupMenuButton<String>(
+                      IconButton(
+                        onPressed: () => _showAddServerDialog(context),
                         icon: const Icon(Icons.add_rounded),
-                        style: MenuItemButton.styleFrom(
-                          backgroundColor: isDark
-                              ? AppColors.surfaceDark
-                              : AppColors.surfaceLight,
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
                         ),
-                        onSelected: (value) {
-                          if (value == 'paste') {
-                            _pasteFromClipboard(context);
-                          } else {
-                            _showAddServerDialog(context);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'paste',
-                            child: Row(
-                              children: [
-                                Icon(Icons.content_paste_rounded),
-                                SizedBox(width: 8),
-                                Text('Paste from Clipboard'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'manual',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_rounded),
-                                SizedBox(width: 8),
-                                Text('Enter Manually'),
-                              ],
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -155,60 +125,106 @@ class ServerSelector extends StatelessWidget {
     );
   }
 
-  Future<void> _pasteFromClipboard(BuildContext context) async {
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = clipboardData?.text;
+  void _showAddServerDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final urlController = TextEditingController();
+    final nameController = TextEditingController();
+    final countryController = TextEditingController();
 
-    if (text != null && text.isNotEmpty) {
-      // Try to parse as server URL
-      if (text.startsWith('mimic://')) {
-        try {
-          final server = ServerConfig(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            name: '',
-            url: text,
-          );
-          context.read<ServerProvider>().addServer(server);
-          context.read<ServerProvider>().selectServer(server);
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Server added from clipboard'),
-                backgroundColor: AppColors.connected,
-              ),
-            );
-          }
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Invalid server URL format'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-          }
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Clipboard does not contain a valid server URL'),
-              backgroundColor: AppColors.warning,
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          title: const Text('Add Server'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server URL',
+                    hintText: 'mimic://uuid@server:port?domains=example.com#Name',
+                    prefixIcon: Icon(Icons.link),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server Name (optional)',
+                    hintText: 'My Server',
+                    prefixIcon: Icon(Icons.label),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: countryController,
+                  decoration: const InputDecoration(
+                    labelText: 'Country Code (optional)',
+                    hintText: 'US',
+                    prefixIcon: Icon(Icons.flag),
+                  ),
+                  maxLength: 2,
+                  textCapitalization: TextCapitalization.characters,
+                ),
+              ],
             ),
-          );
-        }
-      }
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Clipboard is empty'),
-            backgroundColor: AppColors.warning,
           ),
-        );
-      }
-    }
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final url = urlController.text.trim();
+                if (url.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a server URL'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  final server = ServerConfig(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: nameController.text.trim(),
+                    url: url,
+                    countryCode: countryController.text.trim().toUpperCase(),
+                  );
+
+                  context.read<ServerProvider>().addServer(server);
+                  context.read<ServerProvider>().selectServer(server);
+
+                  Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Server added successfully'),
+                      backgroundColor: AppColors.connected,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -234,7 +250,7 @@ class _ServerCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: (isConnected ? AppColors.connected : AppColors.primaryStart)
+            color: (isConnected ? AppColors.connected : AppColors.primary)
                 .withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
@@ -364,7 +380,7 @@ class _ServerListSheet extends StatelessWidget {
                       onPressed: () => _showAddServerDialog(context),
                       icon: const Icon(Icons.add_rounded),
                       style: IconButton.styleFrom(
-                        backgroundColor: AppColors.primaryStart,
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -491,108 +507,6 @@ class _ServerListSheet extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  void _showAddServerDialog(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final urlController = TextEditingController();
-    final nameController = TextEditingController();
-    final countryController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          title: const Text('Add Server'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(
-                    labelText: 'Server URL',
-                    hintText: 'mimic://uuid@server:port?domains=example.com#Name',
-                    prefixIcon: Icon(Icons.link),
-                  ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Server Name (optional)',
-                    hintText: 'My Server',
-                    prefixIcon: Icon(Icons.label),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: countryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Country Code (optional)',
-                    hintText: 'US',
-                    prefixIcon: Icon(Icons.flag),
-                  ),
-                  maxLength: 2,
-                  textCapitalization: TextCapitalization.characters,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final url = urlController.text.trim();
-                if (url.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please enter a server URL'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  final server = ServerConfig(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: nameController.text.trim(),
-                    url: url,
-                    countryCode: countryController.text.trim().toUpperCase(),
-                  );
-
-                  context.read<ServerProvider>().addServer(server);
-                  context.read<ServerProvider>().selectServer(server);
-
-                  Navigator.pop(context);
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Server added successfully'),
-                      backgroundColor: AppColors.connected,
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: ${e.toString()}'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

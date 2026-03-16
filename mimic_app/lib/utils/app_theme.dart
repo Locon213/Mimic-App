@@ -62,9 +62,9 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.backgroundLight,
-      primaryColor: AppColors.primaryStart,
+      primaryColor: AppColors.primary,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryStart,
+        primary: AppColors.primary,
         secondary: AppColors.accent,
         surface: AppColors.surfaceLight,
         error: AppColors.error,
@@ -118,7 +118,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryStart,
+          backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -144,7 +144,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primaryStart, width: 2),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -155,13 +155,13 @@ class AppTheme {
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primaryStart;
+            return AppColors.primary;
           }
           return AppColors.textSecondary;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primaryStart.withOpacity(0.5);
+            return AppColors.primary.withOpacity(0.5);
           }
           return AppColors.surfaceElevated;
         }),
@@ -178,9 +178,9 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.backgroundDark,
-      primaryColor: AppColors.primaryStart,
+      primaryColor: AppColors.primary,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.primaryStart,
+        primary: AppColors.primary,
         secondary: AppColors.accent,
         surface: AppColors.surfaceDark,
         error: AppColors.error,
@@ -234,7 +234,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryStart,
+          backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -260,7 +260,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primaryStart, width: 2),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
