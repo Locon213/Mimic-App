@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/vpn_provider.dart';
@@ -250,110 +251,130 @@ class NavDrawer extends StatelessWidget {
 
   void _showAbout(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceElevated : AppColors.surfaceElevatedLight,
-                  borderRadius: BorderRadius.circular(2),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: isMobile ? 12 : 24, // Less padding on mobile
+            bottom: MediaQuery.of(context).padding.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.surfaceElevated : AppColors.surfaceElevatedLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-              // Logo
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  shape: BoxShape.circle,
+                // Logo
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.security_rounded,
+                    size: 40,
+                    color: Colors.white,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.security_rounded,
-                  size: 40,
-                  color: Colors.white,
+                const SizedBox(height: 12),
+
+                const Text(
+                  'Mimic VPN Client',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              const Text(
-                'Mimic VPN Client',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                const SizedBox(height: 4),
+                Text(
+                  'Version 2.0.0',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? AppColors.textDarkSecondary : AppColors.textSecondary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Version 2.0.0',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? AppColors.textDarkSecondary : AppColors.textSecondary,
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Cross-platform VPN client built with Flutter and Go Mobile.\nPowered by Mimic Protocol.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-              const Text(
-                'Cross-platform VPN client built with Flutter and Go Mobile.\nPowered by Mimic Protocol.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 16),
 
-              const Divider(),
-              const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Developer: ',
+                      style: TextStyle(
+                        color: isDark ? AppColors.textDarkSecondary : AppColors.textSecondary,
+                      ),
+                    ),
+                    const Text(
+                      'Locon213',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Built with Mimic Protocol SDK',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 24),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Developer: ',
-                    style: TextStyle(
-                      color: isDark ? AppColors.textDarkSecondary : AppColors.textSecondary,
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final url = Uri.parse('https://github.com/Locon213/Mimic-App');
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not open GitHub'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.code_rounded),
+                    label: const Text('View on GitHub'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
-                  const Text(
-                    'Locon213',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Built with Mimic Protocol SDK',
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Open GitHub
-                  },
-                  icon: const Icon(Icons.code_rounded),
-                  label: const Text('View on GitHub'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+              ],
+            ),
           ),
         ),
       ),

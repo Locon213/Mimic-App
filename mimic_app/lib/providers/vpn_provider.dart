@@ -1,19 +1,18 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import '../models/network_stats.dart';
 import '../models/server_config.dart';
+import '../services/mimic_sdk_service.dart';
 
 /// VPN Provider - Manages VPN connection state and statistics
-/// 
-/// Note: This is a stub implementation. The actual Go Mobile integration
-/// will be added when gomobile bindings are generated.
 class VpnProvider extends ChangeNotifier {
   ConnectionStatus _status = ConnectionStatus.disconnected;
   NetworkStats _stats = NetworkStats();
   ServerConfig? _currentServer;
-  String _mode = 'Proxy'; // 'Proxy' or 'TUN'
+  String _mode = 'TUN'; // Default to TUN
   String? _error;
-  Timer? _statsTimer;
+  final _mimicClient = MimicMobileClient.instance;
 
   // Getters
   ConnectionStatus get status => _status;
@@ -21,32 +20,53 @@ class VpnProvider extends ChangeNotifier {
   ServerConfig? get currentServer => _currentServer;
   String get mode => _mode;
   String? get error => _error;
-  
+
   bool get isConnected => _status == ConnectionStatus.connected;
   bool get isConnecting => _status == ConnectionStatus.connecting;
   bool get isDisconnected => _status == ConnectionStatus.disconnected;
 
+  /// Check if running on mobile platform
+  bool get isMobilePlatform =>
+      kIsWeb || Platform.isAndroid || Platform.isIOS;
+
+  /// Get available modes based on platform
+  List<String> get availableModes {
+    if (isMobilePlatform) {
+      return ['TUN']; // Only TUN mode on mobile
+    }
+    return ['Proxy', 'TUN']; // Both modes on desktop
+  }
+
   /// Connect to a server
-  Future<void> connect(ServerConfig server, {String mode = 'Proxy'}) async {
+  Future<void> connect(ServerConfig server, {String? mode}) async {
     try {
       _status = ConnectionStatus.connecting;
       _currentServer = server;
-      _mode = mode;
+      if (mode != null) {
+        _mode = mode;
+      }
       _error = null;
       notifyListeners();
 
-      // TODO: Integrate with Go Mobile SDK
-      // await _mimicClient.connect(server.url, mode);
-      
-      // Simulate connection delay for now
-      await Future.delayed(const Duration(seconds: 2));
-      
+      // Connect via Go Mobile SDK
+      await _mimicClient.connect(server.url, _mode);
+
       _status = ConnectionStatus.connected;
+      
+      // Set stats callback
+      _mimicClient.setStatsCallback((sdkStats) {
+        _stats = NetworkStats(
+          downloadSpeed: sdkStats.downloadSpeed,
+          uploadSpeed: sdkStats.uploadSpeed,
+          ping: sdkStats.ping,
+          totalDownload: sdkStats.totalDownload,
+          totalUpload: sdkStats.totalUpload,
+        );
+        notifyListeners();
+      });
+
       notifyListeners();
 
-      // Start stats simulation (will be replaced with real callbacks)
-      _startStatsSimulation();
-      
     } catch (e) {
       _status = ConnectionStatus.disconnected;
       _error = e.toString();
@@ -58,19 +78,27 @@ class VpnProvider extends ChangeNotifier {
   /// Disconnect from current server
   Future<void> disconnect() async {
     try {
-      _stopStatsSimulation();
-      
-      // TODO: Integrate with Go Mobile SDK
-      // await _mimicClient.disconnect();
-      
+      // Disconnect via Go Mobile SDK
+      await _mimicClient.disconnect();
+
       _status = ConnectionStatus.disconnected;
       _stats = NetworkStats();
+      _currentServer = null;
       notifyListeners();
-      
+
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  /// Set connection mode (only when disconnected)
+  Future<void> setMode(String newMode) async {
+    if (isConnected || isConnecting) {
+      throw Exception('Cannot change mode while connected');
+    }
+    _mode = newMode;
+    notifyListeners();
   }
 
   /// Toggle connection
@@ -82,39 +110,6 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
-  /// Start stats simulation (to be replaced with Go Mobile callbacks)
-  void _startStatsSimulation() {
-    _stopStatsSimulation();
-    
-    int totalDownload = 0;
-    int totalUpload = 0;
-    
-    _statsTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      // Simulate realistic traffic
-      final downloadSpeed = 1024 * 100 + (DateTime.now().millisecond * 100);
-      final uploadSpeed = 512 * 100 + (DateTime.now().millisecond * 50);
-      
-      totalDownload += downloadSpeed;
-      totalUpload += uploadSpeed;
-      
-      _stats = NetworkStats(
-        downloadSpeed: downloadSpeed,
-        uploadSpeed: uploadSpeed,
-        ping: 20 + (DateTime.now().millisecond % 30),
-        totalDownload: totalDownload,
-        totalUpload: totalUpload,
-      );
-      
-      notifyListeners();
-    });
-  }
-
-  /// Stop stats simulation
-  void _stopStatsSimulation() {
-    _statsTimer?.cancel();
-    _statsTimer = null;
-  }
-
   /// Reconnect to current server
   Future<void> reconnect() async {
     if (_currentServer != null) {
@@ -124,9 +119,15 @@ class VpnProvider extends ChangeNotifier {
     }
   }
 
+  /// Get current stats from SDK
+  NetworkStats get currentStats => _mimicClient.getStats();
+
+  /// Get server name from SDK
+  String? get serverName => _mimicClient.getServerName();
+
   @override
   void dispose() {
-    _stopStatsSimulation();
+    disconnect();
     super.dispose();
   }
 }

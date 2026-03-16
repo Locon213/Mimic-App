@@ -1,54 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// App color scheme inspired by modern VPN apps (V2RayTun style)
+/// App color scheme - Strict black and white
 class AppColors {
-  // Primary gradient colors
-  static const Color primaryStart = Color(0xFF6366F1);
-  static const Color primaryEnd = Color(0xFF8B5CF6);
-  
+  // Primary colors
+  static const Color primary = Color(0xFF000000);
+  static const Color primaryLight = Color(0xFF333333);
+  static const Color primaryDark = Color(0xFF000000);
+
   // Status colors
-  static const Color connected = Color(0xFF10B981);
-  static const Color disconnected = Color(0xFFEF4444);
-  static const Color connecting = Color(0xFFF59E0B);
-  
+  static const Color connected = Color(0xFF000000);
+  static const Color disconnected = Color(0xFF666666);
+  static const Color connecting = Color(0xFF999999);
+
   // Background colors (Dark theme)
-  static const Color backgroundDark = Color(0xFF0F172A);
-  static const Color surfaceDark = Color(0xFF1E293B);
-  static const Color surfaceElevated = Color(0xFF334155);
-  
+  static const Color backgroundDark = Color(0xFF000000);
+  static const Color surfaceDark = Color(0xFF111111);
+  static const Color surfaceElevated = Color(0xFF1A1A1A);
+
   // Background colors (Light theme)
-  static const Color backgroundLight = Color(0xFFF8FAFC);
+  static const Color backgroundLight = Color(0xFFFFFFFF);
   static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color surfaceElevatedLight = Color(0xFFF1F5F9);
-  
+  static const Color surfaceElevatedLight = Color(0xFFF5F5F5);
+
   // Text colors
-  static const Color textPrimary = Color(0xFF1E293B);
-  static const Color textSecondary = Color(0xFF64748B);
+  static const Color textPrimary = Color(0xFF000000);
+  static const Color textSecondary = Color(0xFF666666);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
-  static const Color textDarkPrimary = Color(0xFFF1F5F9);
-  static const Color textDarkSecondary = Color(0xFF94A3B8);
-  
+  static const Color textDarkPrimary = Color(0xFFFFFFFF);
+  static const Color textDarkSecondary = Color(0xFFAAAAAA);
+
   // Accent colors
-  static const Color accent = Color(0xFF06B6D4);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
-  
+  static const Color accent = Color(0xFF333333);
+  static const Color warning = Color(0xFF999999);
+  static const Color error = Color(0xFFCC0000);
+
   // Card gradients
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primaryStart, primaryEnd],
+    colors: [primary, primaryLight],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  
+
   static const LinearGradient connectedGradient = LinearGradient(
-    colors: [Color(0xFF10B981), Color(0xFF059669)],
+    colors: [connected, Color(0xFF333333)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  
+
   static const LinearGradient disconnectedGradient = LinearGradient(
-    colors: [Color(0xFF64748B), Color(0xFF475569)],
+    colors: [Color(0xFF444444), Color(0xFF222222)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

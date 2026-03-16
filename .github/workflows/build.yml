@@ -156,6 +156,7 @@ jobs:
         run: |
           chmod +x scripts/build-mobile.sh
           ./scripts/build-mobile.sh
+          mkdir -p mimic_app/ios/Frameworks
           cp mobile/libs/Mimic.xcframework mimic_app/ios/Frameworks/
 
       - name: Install Flutter dependencies
@@ -207,10 +208,8 @@ jobs:
         working-directory: mimic_app
         run: |
           mkdir dist
-          cp build/windows/runner/Release/* dist/
-          cp -r build/windows/runner/Release/data/flutter_assets dist/
-          cp -r build/windows/runner/Release/data/icudtl.dat dist/
-        shell: bash
+          cp build/windows/x64/runner/Release/mimic_app.exe dist/
+          cp -r build/windows/x64/runner/Release/data dist/
 
       - name: Upload Windows App
         uses: actions/upload-artifact@v4
@@ -291,7 +290,7 @@ jobs:
         working-directory: mimic_app
         run: |
           mkdir dist
-          cp -r build/macos/Build/Products/Release/MimicApp.app dist/
+          cp -r build/macos/Build/Products/Release/mimic_app.app dist/
 
       - name: Upload macOS App
         uses: actions/upload-artifact@v4

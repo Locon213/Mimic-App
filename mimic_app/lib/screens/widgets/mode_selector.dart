@@ -13,7 +13,13 @@ class ModeSelector extends StatelessWidget {
     return Consumer<VpnProvider>(
       builder: (context, vpnProvider, child) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        final isProxy = vpnProvider.mode == 'Proxy';
+        final currentMode = vpnProvider.mode;
+        final availableModes = vpnProvider.availableModes;
+
+        // Only show on desktop (mobile has TUN only)
+        if (availableModes.length <= 1) {
+          return const SizedBox.shrink();
+        }
 
         return Container(
           padding: const EdgeInsets.all(20),
@@ -72,14 +78,11 @@ class ModeSelector extends StatelessWidget {
                         icon: Icons.security_rounded,
                         label: 'Proxy',
                         subtitle: 'HTTPS/SOCKS5',
-                        isSelected: isProxy,
+                        isSelected: currentMode == 'Proxy',
                         isDark: isDark,
-                        onTap: () {
-                          if (!vpnProvider.isConnected) {
-                            // Mode can only be changed when disconnected
-                            // This would need to be handled in the provider
-                          }
-                        },
+                        onTap: vpnProvider.isDisconnected
+                            ? () => vpnProvider.setMode('Proxy')
+                            : null,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -88,13 +91,11 @@ class ModeSelector extends StatelessWidget {
                         icon: Icons.public_rounded,
                         label: 'TUN',
                         subtitle: 'Global Routing',
-                        isSelected: !isProxy,
+                        isSelected: currentMode == 'TUN',
                         isDark: isDark,
-                        onTap: () {
-                          if (!vpnProvider.isConnected) {
-                            // Mode can only be changed when disconnected
-                          }
-                        },
+                        onTap: vpnProvider.isDisconnected
+                            ? () => vpnProvider.setMode('TUN')
+                            : null,
                       ),
                     ),
                   ],
@@ -107,24 +108,24 @@ class ModeSelector extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isProxy
-                      ? AppColors.primaryStart.withOpacity(0.1)
+                  color: currentMode == 'Proxy'
+                      ? AppColors.primary.withOpacity(0.1)
                       : AppColors.accent.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      isProxy ? Icons.info_outline : Icons.info_outline,
+                      Icons.info_outline,
                       size: 18,
-                      color: isProxy
-                          ? AppColors.primaryStart
+                      color: currentMode == 'Proxy'
+                          ? AppColors.primary
                           : AppColors.accent,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isProxy
+                        currentMode == 'Proxy'
                             ? 'Route specific traffic through proxy. Suitable for browsers and apps.'
                             : 'Route all device traffic through VPN. Requires admin/root privileges.',
                         style: TextStyle(
@@ -138,6 +139,38 @@ class ModeSelector extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // Warning when connected
+              if (vpnProvider.isConnected || vpnProvider.isConnecting)
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: AppColors.warning,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Disconnect to change mode',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? AppColors.textDarkSecondary
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         );
@@ -152,7 +185,7 @@ class _ModeButton extends StatelessWidget {
   final String subtitle;
   final bool isSelected;
   final bool isDark;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _ModeButton({
     required this.icon,
@@ -160,7 +193,7 @@ class _ModeButton extends StatelessWidget {
     required this.subtitle,
     required this.isSelected,
     required this.isDark,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
@@ -178,7 +211,9 @@ class _ModeButton extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : (isDark ? AppColors.textDarkSecondary : AppColors.textSecondary),
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? AppColors.textDarkSecondary : AppColors.textSecondary),
               size: 24,
             ),
             const SizedBox(height: 6),

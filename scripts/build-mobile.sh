@@ -21,14 +21,18 @@ gomobile init
 echo "Installing gomobile dependencies..."
 go get golang.org/x/mobile/bind@latest
 
-# Build for Android (AAR)
-echo -e "\n=== Building Android AAR ==="
-gomobile bind -target android -androidapi 21 -o "$OUTPUT_DIR/mimic.aar" "$PACKAGE_NAME"
-if [ $? -eq 0 ]; then
-    echo "✓ Android AAR built successfully: $OUTPUT_DIR/mimic.aar"
+# Build for Android (AAR) - only on Linux/Windows
+if [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    echo -e "\n=== Building Android AAR ==="
+    gomobile bind -target android -androidapi 21 -o "$OUTPUT_DIR/mimic.aar" "$PACKAGE_NAME"
+    if [ $? -eq 0 ]; then
+        echo "✓ Android AAR built successfully: $OUTPUT_DIR/mimic.aar"
+    else
+        echo "✗ Android build failed"
+        exit 1
+    fi
 else
-    echo "✗ Android build failed"
-    exit 1
+    echo -e "\n⊘ Skipping Android build (not on Linux/Windows)"
 fi
 
 # Build for iOS (Framework) - only on macOS
