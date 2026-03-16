@@ -58,12 +58,6 @@ jobs:
           name: mimic-android-aar
           path: mobile/libs/mimic.aar
 
-      - name: Upload iOS Framework
-        uses: actions/upload-artifact@v4
-        with:
-          name: mimic-ios-framework
-          path: mobile/libs/Mimic.xcframework
-
   # ============================================
   # Build Flutter Android App
   # ============================================
@@ -133,7 +127,6 @@ jobs:
   # ============================================
   build-flutter-ios:
     runs-on: macos-latest
-    needs: build-mobile-libs
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -149,16 +142,12 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Download Go Mobile Libraries
-        uses: actions/download-artifact@v4
-        with:
-          name: mimic-ios-framework
-          path: mimic_app/ios/Frameworks/
-
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile init
+          go get golang.org/x/mobile/bind@latest
 
       - name: Build Go Mobile for iOS
         working-directory: .

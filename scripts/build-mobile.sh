@@ -31,14 +31,18 @@ else
     exit 1
 fi
 
-# Build for iOS (Framework)
-echo -e "\n=== Building iOS Framework ==="
-gomobile bind -target ios -iosversion 12.0 -o "$OUTPUT_DIR/Mimic.xcframework" "$PACKAGE_NAME"
-if [ $? -eq 0 ]; then
-    echo "✓ iOS Framework built successfully: $OUTPUT_DIR/Mimic.xcframework"
+# Build for iOS (Framework) - only on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo -e "\n=== Building iOS Framework ==="
+    gomobile bind -target ios -iosversion 12.0 -o "$OUTPUT_DIR/Mimic.xcframework" "$PACKAGE_NAME"
+    if [ $? -eq 0 ]; then
+        echo "✓ iOS Framework built successfully: $OUTPUT_DIR/Mimic.xcframework"
+    else
+        echo "✗ iOS build failed"
+        exit 1
+    fi
 else
-    echo "✗ iOS build failed"
-    exit 1
+    echo -e "\n⊘ Skipping iOS build (not on macOS)"
 fi
 
 echo -e "\n=== Build Complete ==="
