@@ -20,7 +20,6 @@ gomobile init
 # Install required gomobile dependencies
 echo "Installing gomobile dependencies..."
 go get golang.org/x/mobile/bind@latest
-go get golang.org/x/mobile/exp@latest
 
 # Build for Android (AAR)
 echo -e "\n=== Building Android AAR ==="
