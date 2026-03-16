@@ -157,7 +157,7 @@ jobs:
           chmod +x scripts/build-mobile.sh
           ./scripts/build-mobile.sh
           mkdir -p mimic_app/ios/Frameworks
-          cp mobile/libs/Mimic.xcframework mimic_app/ios/Frameworks/
+          cp -R mobile/libs/Mimic.xcframework mimic_app/ios/Frameworks/
 
       - name: Install Flutter dependencies
         working-directory: mimic_app
