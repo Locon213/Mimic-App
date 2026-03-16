@@ -104,9 +104,6 @@ flutter run
 ```bash
 # Build APK
 flutter build apk --release
-
-# Build App Bundle (for Play Store)
-flutter build appbundle --release
 ```
 
 ### iOS
@@ -198,7 +195,6 @@ When you create a new GitHub Release, the workflow will:
 2. Build Flutter app for all platforms
 3. Attach artifacts to the release:
    - `MimicApp-Android.apk`
-   - `MimicApp-Android.aab`
    - `MimicApp-iOS.ipa`
    - `MimicApp-Windows.zip`
    - `MimicApp-Linux.tar.gz`

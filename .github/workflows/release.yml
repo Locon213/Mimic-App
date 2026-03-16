@@ -119,21 +119,11 @@ jobs:
         working-directory: mimic_app
         run: flutter build apk --release
 
-      - name: Build Android App Bundle
-        working-directory: mimic_app
-        run: flutter build appbundle --release
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MimicApp-Android.apk
           path: mimic_app/build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Upload App Bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: MimicApp-Android.aab
-          path: mimic_app/build/app/outputs/bundle/release/app-release.aab
 
   # ============================================
   # Build Flutter iOS App
@@ -327,11 +317,6 @@ jobs:
         with:
           name: MimicApp-Android.apk
 
-      - name: Download Android AAB
-        uses: actions/download-artifact@v4
-        with:
-          name: MimicApp-Android.aab
-
       - name: Download iOS IPA
         uses: actions/download-artifact@v4
         with:
@@ -357,7 +342,6 @@ jobs:
         with:
           files: |
             MimicApp-Android.apk
-            MimicApp-Android.aab
             MimicApp-iOS.ipa
             MimicApp-Windows.zip
             MimicApp-Linux.tar.gz

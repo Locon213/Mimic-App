@@ -72,27 +72,27 @@ class AppTheme {
         onSurface: AppColors.textPrimary,
         onError: AppColors.textOnPrimary,
       ),
-      textTheme: GoogleFonts.poppinsTextTheme().copyWith(
-        displayLarge: GoogleFonts.poppins(
+      textTheme: GoogleFonts.openSansTextTheme().copyWith(
+        displayLarge: GoogleFonts.openSans(
           fontSize: 32,
           fontWeight: FontWeight.bold,
           color: AppColors.textPrimary,
         ),
-        headlineLarge: GoogleFonts.poppins(
+        headlineLarge: GoogleFonts.openSans(
           fontSize: 24,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        titleLarge: GoogleFonts.poppins(
+        titleLarge: GoogleFonts.openSans(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        bodyLarge: GoogleFonts.poppins(
+        bodyLarge: GoogleFonts.openSans(
           fontSize: 16,
           color: AppColors.textPrimary,
         ),
-        bodyMedium: GoogleFonts.poppins(
+        bodyMedium: GoogleFonts.openSans(
           fontSize: 14,
           color: AppColors.textSecondary,
         ),
@@ -101,7 +101,7 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.poppins(
+        titleTextStyle: GoogleFonts.openSans(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -124,7 +124,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.poppins(
+          textStyle: GoogleFonts.openSans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
@@ -188,27 +188,27 @@ class AppTheme {
         onSurface: AppColors.textDarkPrimary,
         onError: AppColors.textOnPrimary,
       ),
-      textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).copyWith(
-        displayLarge: GoogleFonts.poppins(
+      textTheme: GoogleFonts.openSansTextTheme(ThemeData.dark().textTheme).copyWith(
+        displayLarge: GoogleFonts.openSans(
           fontSize: 32,
           fontWeight: FontWeight.bold,
           color: AppColors.textDarkPrimary,
         ),
-        headlineLarge: GoogleFonts.poppins(
+        headlineLarge: GoogleFonts.openSans(
           fontSize: 24,
           fontWeight: FontWeight.w600,
           color: AppColors.textDarkPrimary,
         ),
-        titleLarge: GoogleFonts.poppins(
+        titleLarge: GoogleFonts.openSans(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: AppColors.textDarkPrimary,
         ),
-        bodyLarge: GoogleFonts.poppins(
+        bodyLarge: GoogleFonts.openSans(
           fontSize: 16,
           color: AppColors.textDarkPrimary,
         ),
-        bodyMedium: GoogleFonts.poppins(
+        bodyMedium: GoogleFonts.openSans(
           fontSize: 14,
           color: AppColors.textDarkSecondary,
         ),
@@ -217,7 +217,7 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.poppins(
+        titleTextStyle: GoogleFonts.openSans(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: AppColors.textDarkPrimary,
@@ -240,7 +240,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.poppins(
+          textStyle: GoogleFonts.openSans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
