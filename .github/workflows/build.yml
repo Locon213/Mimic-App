@@ -193,9 +193,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Install MinGW-w64
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
+        run: |
+          choco install mingw --no-progress -y
+          refreshenv
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -273,7 +273,6 @@ jobs:
         run: |
           chmod +x scripts/build-desktop.sh
           ./scripts/build-desktop.sh
-          cp desktop/libs/libmimic.so mimic_app/linux/
 
       - name: Build Linux
         working-directory: mimic_app
@@ -284,7 +283,7 @@ jobs:
         run: |
           mkdir dist
           cp -r build/linux/x64/release/bundle/* dist/
-          cp mimic_app/linux/libmimic.so dist/
+          cp desktop/libs/libmimic.so dist/
 
       - name: Upload Linux App
         uses: actions/upload-artifact@v4

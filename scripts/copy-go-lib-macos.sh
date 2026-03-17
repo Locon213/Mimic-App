@@ -9,7 +9,7 @@ echo "=== Copying Go CGO library to macOS bundle ==="
 
 # Source and destination paths
 GO_LIB="$PROJECT_ROOT/desktop/libs/libmimic.dylib"
-APP_BUNDLE="$PROJECT_ROOT/build/macos/Build/Products/Release/mimic_app.app/Contents/Frameworks"
+APP_BUNDLE="$PROJECT_ROOT/mimic_app/build/macos/Build/Products/Release/mimic_app.app/Contents/Frameworks"
 
 if [ -f "$GO_LIB" ]; then
     mkdir -p "$APP_BUNDLE"
@@ -17,4 +17,5 @@ if [ -f "$GO_LIB" ]; then
     echo "✓ Copied libmimic.dylib to $APP_BUNDLE"
 else
     echo "⊘ Go library not found at $GO_LIB"
+    exit 1
 fi
