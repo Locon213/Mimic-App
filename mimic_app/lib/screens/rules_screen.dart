@@ -148,7 +148,7 @@ class _RulesScreenState extends State<RulesScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final nameController = TextEditingController();
     final valueController = TextEditingController();
-    final isDomain = widget.ruleType == RuleType.direct ? null : true;
+    bool? isDomain = widget.ruleType == RuleType.direct ? null : true;
 
     showDialog(
       context: context,
@@ -367,11 +367,11 @@ class _RuleTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                widget.ruleType == RuleType.direct
+                rule.type == RuleType.direct
                     ? Icons.apps_rounded
-                    : widget.ruleType == RuleType.block
+                    : rule.type == RuleType.block
                         ? Icons.block_rounded
-                        : Icons.proxy_rounded,
+                        : Icons.security_rounded,
                 color: color,
                 size: 22,
               ),
@@ -410,6 +410,4 @@ class _RuleTile extends StatelessWidget {
       ),
     );
   }
-
-  RuleType get widgetType => rule.type;
 }

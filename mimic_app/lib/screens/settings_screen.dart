@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/vpn_provider.dart';
+import '../models/routing_rule.dart';
 import '../utils/app_theme.dart';
 import 'rules_screen.dart';
 
@@ -96,7 +97,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
 
                 _RuleCard(
-                  icon: Icons.direct_rounded,
+                  icon: Icons.call_split_rounded,
                   title: 'Direct',
                   subtitle: '${settingsProvider.directRules.length} rules',
                   description: 'Apps and domains that bypass VPN',
@@ -120,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 _RuleCard(
-                  icon: Icons.proxy_rounded,
+                  icon: Icons.security_rounded,
                   title: 'Proxy',
                   subtitle: '${settingsProvider.proxyRules.length} rules',
                   description: 'Apps and domains that use VPN',
