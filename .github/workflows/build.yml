@@ -70,7 +70,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: MimicApp-Android.apk
           path: mimic_app/build/app/outputs/flutter-apk/app-release.apk
@@ -125,7 +125,7 @@ jobs:
           zip -r ../../../MimicApp-iOS.ipa Payload
 
       - name: Upload iOS IPA
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: MimicApp-iOS
           path: MimicApp-iOS.ipa
@@ -186,7 +186,7 @@ jobs:
           cp ../desktop/libs/mimic.dll dist/
 
       - name: Upload Windows App
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: MimicApp-Windows
           path: mimic_app/dist/
@@ -241,7 +241,7 @@ jobs:
           cp ../desktop/libs/libmimic.so dist/
 
       - name: Upload Linux App
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: MimicApp-Linux
           path: mimic_app/dist/
@@ -297,7 +297,7 @@ jobs:
           cp ../desktop/libs/libmimic.dylib dist/
 
       - name: Upload macOS App
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: MimicApp-macOS
           path: mimic_app/dist/
