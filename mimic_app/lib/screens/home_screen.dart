@@ -12,7 +12,7 @@ import 'widgets/server_selector.dart';
 import 'widgets/mode_selector.dart';
 import 'widgets/nav_drawer.dart';
 
-/// Home Screen - Main VPN control interface
+/// Home Screen - Main VPN control interface with minimalist design
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -46,18 +46,22 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: Theme.of(context).brightness == Brightness.dark
+            colors: isDark
                 ? [
+                    AppColors.backgroundDark,
                     AppColors.backgroundDark,
                     AppColors.surfaceDark,
                   ]
                 : [
+                    AppColors.backgroundLight,
                     AppColors.backgroundLight,
                     AppColors.surfaceLight,
                   ],
@@ -66,15 +70,17 @@ class _HomeScreenState extends State<HomeScreen>
         child: SafeArea(
           child: Column(
             children: [
-              // App Bar
+              // Minimal App Bar
               _buildAppBar(),
-              
+
               // Main Content
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
+                      const SizedBox(height: 12),
+
                       // Connection Status & Button
                       ConnectionTile(
                         onConnectPressed: _handleConnect,
@@ -82,38 +88,68 @@ class _HomeScreenState extends State<HomeScreen>
                       )
                           .animate()
                           .fadeIn(duration: 600.ms)
-                          .slideY(begin: 0.2, end: 0),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Statistics Card
+                          .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1)),
+
+                      const SizedBox(height: 24),
+
+                      // Server Selector - Always visible
+                      ServerSelector()
+                          .animate()
+                          .fadeIn(delay: 200.ms, duration: 600.ms)
+                          .slideY(begin: 0.1, end: 0),
+
+                      const SizedBox(height: 16),
+
+                      // Mode Selector (Desktop only)
                       Consumer<VpnProvider>(
                         builder: (context, vpnProvider, child) {
-                          if (vpnProvider.isConnected) {
-                            return StatsCard()
+                          if (vpnProvider.availableModes.length > 1) {
+                            return ModeSelector()
                                 .animate()
                                 .fadeIn(delay: 300.ms, duration: 600.ms)
-                                .slideY(begin: 0.2, end: 0);
+                                .slideY(begin: 0.1, end: 0);
                           }
                           return const SizedBox.shrink();
                         },
                       ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Mode Selector
-                      ModeSelector()
-                          .animate()
-                          .fadeIn(delay: 200.ms, duration: 600.ms)
-                          .slideY(begin: 0.2, end: 0),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Server Selector
-                      ServerSelector()
-                          .animate()
-                          .fadeIn(delay: 400.ms, duration: 600.ms)
-                          .slideY(begin: 0.2, end: 0),
+
+                      // Stats Card - Only when connected
+                      Consumer<VpnProvider>(
+                        builder: (context, vpnProvider, child) {
+                          if (vpnProvider.isConnected) {
+                            return Column(
+                              children: [
+                                const SizedBox(height: 16),
+                                StatsCard()
+                                    .animate()
+                                    .fadeIn(delay: 400.ms, duration: 600.ms)
+                                    .slideY(begin: 0.1, end: 0),
+                              ],
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // Bottom status hint
+                      Consumer<VpnProvider>(
+                        builder: (context, vpnProvider, child) {
+                          if (vpnProvider.isDisconnected) {
+                            return Text(
+                              'Tap to connect and secure your connection',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark
+                                    ? AppColors.textDarkSecondary
+                                    : AppColors.textSecondary,
+                              ),
+                            ).animate().fadeIn(delay: 600.ms, duration: 800.ms);
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -122,56 +158,75 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ),
-      drawer: NavDrawer(),
+      drawer: const NavDrawer(),
     );
   }
 
   Widget _buildAppBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
         children: [
+          // Menu Button
           Builder(
-            builder: (context) => IconButton(
-              onPressed: () => Scaffold.of(context).openDrawer(),
-              icon: const Icon(Icons.menu_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.surfaceElevated
-                    : AppColors.surfaceElevatedLight,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            builder: (context) => Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceElevated : AppColors.surfaceElevatedLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: IconButton(
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: const Icon(Icons.menu_rounded, size: 24),
+                padding: const EdgeInsets.all(10),
               ),
             ),
           ),
-          
+
           const Spacer(),
-          
-          Text(
-            'Mimic VPN',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+
+          // App Title
+          Column(
+            children: [
+              Text(
+                'Mimic',
+                style: TextStyle(
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? AppColors.textDarkPrimary : AppColors.textPrimary,
                 ),
-          ),
-          
-          const Spacer(),
-          
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) => IconButton(
-              onPressed: themeProvider.toggleTheme,
-              icon: Icon(
-                themeProvider.isDarkMode
-                    ? Icons.light_mode_rounded
-                    : Icons.dark_mode_rounded,
               ),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.surfaceElevated
-                    : AppColors.surfaceElevatedLight,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              Text(
+                'VPN',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? AppColors.textDarkSecondary : AppColors.textSecondary,
+                  letterSpacing: 2,
                 ),
+              ),
+            ],
+          ),
+
+          const Spacer(),
+
+          // Theme Toggle
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, child) => Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceElevated : AppColors.surfaceElevatedLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: IconButton(
+                onPressed: themeProvider.toggleTheme,
+                icon: Icon(
+                  themeProvider.isDarkMode
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
+                  size: 24,
+                ),
+                padding: const EdgeInsets.all(10),
               ),
             ),
           ),
@@ -183,12 +238,12 @@ class _HomeScreenState extends State<HomeScreen>
   void _handleConnect() {
     final serverProvider = context.read<ServerProvider>();
     final vpnProvider = context.read<VpnProvider>();
-    
+
     if (serverProvider.selectedServer == null) {
       _showNoServerDialog();
       return;
     }
-    
+
     vpnProvider.connect(
       serverProvider.selectedServer!,
       mode: vpnProvider.mode,
@@ -200,15 +255,25 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showNoServerDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         title: const Text('No Server Selected'),
-        content: const Text('Please select a server from the list below.'),
+        content: const Text('Please select or add a server to connect.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Open server selector
+            },
+            child: const Text('Add Server'),
           ),
         ],
       ),

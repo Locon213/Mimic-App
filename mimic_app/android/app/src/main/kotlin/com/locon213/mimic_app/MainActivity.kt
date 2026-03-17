@@ -5,10 +5,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.util.Log
 import androidx.annotation.NonNull
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -21,6 +24,7 @@ class MainActivity : FlutterActivity() {
         private const val VPN_CHANNEL = "com.locon213.mimic_app/vpn"
         private const val VPN_EVENT_CHANNEL = "com.locon213.mimic_app/vpn_events"
         private const val VPN_PERMISSION_REQUEST = 1001
+        private const val NOTIFICATION_PERMISSION_REQUEST = 1002
     }
 
     private var vpnMethodChannel: MethodChannel? = null
@@ -123,24 +127,44 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        
-        if (requestCode == VPN_PERMISSION_REQUEST) {
-            if (resultCode == Activity.RESULT_OK) {
-                Log.d(TAG, "VPN permission granted, connecting...")
-                // Now connect with the pending server
-                startVpnService(pendingServerUrl, pendingServerName, pendingMode)
-                pendingResult?.success(true)
-                pendingResult = null
-            } else {
-                Log.d(TAG, "VPN permission denied")
-                pendingResult?.success(false)
-                pendingResult = null
+
+        when (requestCode) {
+            VPN_PERMISSION_REQUEST -> {
+                if (resultCode == Activity.RESULT_OK) {
+                    Log.d(TAG, "VPN permission granted, connecting...")
+                    startVpnService(pendingServerUrl, pendingServerName, pendingMode)
+                    pendingResult?.success(true)
+                    pendingResult = null
+                } else {
+                    Log.d(TAG, "VPN permission denied")
+                    pendingResult?.success(false)
+                    pendingResult = null
+                }
+            }
+            NOTIFICATION_PERMISSION_REQUEST -> {
+                // Notification permission result - continue with VPN connection
+                Log.d(TAG, "Notification permission result: $resultCode")
             }
         }
     }
 
     private fun prepareVpn(result: MethodChannel.Result) {
         try {
+            // Request notification permission for Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                        NOTIFICATION_PERMISSION_REQUEST
+                    )
+                }
+            }
+
             val prepareIntent = VpnService.prepare(this)
             if (prepareIntent != null) {
                 Log.d(TAG, "VPN permission required, starting activity")

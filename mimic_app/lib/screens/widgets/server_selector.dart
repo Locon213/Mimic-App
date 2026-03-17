@@ -141,14 +141,26 @@ class ServerSelector extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Simple link input
                 TextField(
                   controller: urlController,
                   decoration: const InputDecoration(
-                    labelText: 'Server URL',
-                    hintText: 'mimic://uuid@server:port?domains=example.com#Name',
+                    labelText: 'Server Link',
+                    hintText: 'https://example.com/config#MimicTop\nor\nmimic://uuid@server:port?domains=example.com#Name',
                     prefixIcon: Icon(Icons.link),
+                    helperText: 'Paste any link with #Name at the end',
                   ),
-                  maxLines: 2,
+                  maxLines: 3,
+                  onChanged: (value) {
+                    // Auto-extract name from #fragment
+                    if (value.contains('#') && nameController.text.isEmpty) {
+                      final parts = value.split('#');
+                      if (parts.length > 1 && parts.last.isNotEmpty) {
+                        nameController.text = parts.last;
+                        setDialogState(() {});
+                      }
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -157,6 +169,7 @@ class ServerSelector extends StatelessWidget {
                     labelText: 'Server Name (optional)',
                     hintText: 'My Server',
                     prefixIcon: Icon(Icons.label),
+                    helperText: 'Auto-filled from link if contains #Name',
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -357,14 +370,26 @@ class _ServerListSheet extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Simple link input
                 TextField(
                   controller: urlController,
                   decoration: const InputDecoration(
-                    labelText: 'Server URL',
-                    hintText: 'mimic://uuid@server:port?domains=example.com#Name',
+                    labelText: 'Server Link',
+                    hintText: 'https://example.com/config#MimicTop\nor\nmimic://uuid@server:port?domains=example.com#Name',
                     prefixIcon: Icon(Icons.link),
+                    helperText: 'Paste any link with #Name at the end',
                   ),
-                  maxLines: 2,
+                  maxLines: 3,
+                  onChanged: (value) {
+                    // Auto-extract name from #fragment
+                    if (value.contains('#') && nameController.text.isEmpty) {
+                      final parts = value.split('#');
+                      if (parts.length > 1 && parts.last.isNotEmpty) {
+                        nameController.text = parts.last;
+                        setDialogState(() {});
+                      }
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -373,6 +398,7 @@ class _ServerListSheet extends StatelessWidget {
                     labelText: 'Server Name (optional)',
                     hintText: 'My Server',
                     prefixIcon: Icon(Icons.label),
+                    helperText: 'Auto-filled from link if contains #Name',
                   ),
                 ),
                 const SizedBox(height: 16),

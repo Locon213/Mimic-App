@@ -13,6 +13,8 @@ import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import mobile.MimicClient
+import mobile.NetworkStats
 import java.io.FileInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -45,6 +47,12 @@ class MimicVpnService : VpnService() {
     private var isRunning = false
     private var currentServerName: String = "Unknown"
     private var currentServerUrl: String = ""
+    private var currentMode: String = "TUN"
+    
+    // Go Mobile client for VPN processing
+    private var mimicClient: MimicClient? = null
+    private var statsTimer: java.util.Timer? = null
+    private var currentStats: NetworkStats? = null
 
     // Network tracking
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -70,6 +78,7 @@ class MimicVpnService : VpnService() {
                 val mode = intent.getStringExtra("mode") ?: "TUN"
                 currentServerUrl = serverUrl
                 currentServerName = serverName
+                currentMode = mode
                 connect(serverUrl, serverName, mode)
             }
             ACTION_DISCONNECT -> {
@@ -101,9 +110,9 @@ class MimicVpnService : VpnService() {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
                 "VPN Connection",
-                NotificationManager.IMPORTANCE_MIN
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows VPN connection status"
+                description = "Shows VPN connection status and speed"
                 setShowBadge(false)
                 enableVibration(false)
                 enableLights(false)
@@ -114,37 +123,74 @@ class MimicVpnService : VpnService() {
         }
     }
 
-    private fun createNotification(statusText: String, serverName: String = currentServerName) =
-        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+    private fun createNotification(
+        statusText: String,
+        serverName: String = currentServerName,
+        downloadSpeed: Long = 0,
+        uploadSpeed: Long = 0
+    ): Notification {
+        // Format speed
+        val downloadStr = formatSpeed(downloadSpeed)
+        val uploadStr = formatSpeed(uploadSpeed)
+
+        // Create disconnect intent
+        val disconnectIntent = Intent(this, MimicVpnService::class.java).apply {
+            action = ACTION_DISCONNECT
+        }
+        val disconnectPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            disconnectIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // Create open app intent
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // Build notification with BigText style for speed info
+        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Mimic VPN - $serverName")
             .setContentText(statusText)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("$statusText\n⬇ $downloadStr  ⬆ $uploadStr")
+            )
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this,
-                    0,
-                    Intent(this, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    },
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
-            )
+            .setContentIntent(openAppPendingIntent)
             .addAction(
                 R.drawable.ic_notification,
                 "Disconnect",
-                PendingIntent.getService(
-                    this,
-                    1,
-                    Intent(this, MimicVpnService::class.java).apply {
-                        action = ACTION_DISCONNECT
-                    },
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
+                disconnectPendingIntent
             )
-            .build()
+            .setDeleteIntent(null) // Prevent swipe dismiss
+
+        // Make notification non-dismissible on Android 8+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setCategory(Notification.CATEGORY_SERVICE)
+            builder.setPriority(Notification.PRIORITY_LOW)
+        }
+
+        return builder.build()
+    }
+
+    private fun formatSpeed(bytesPerSecond: Long): String {
+        return when {
+            bytesPerSecond < 1024 -> "$bytesPerSecond B/s"
+            bytesPerSecond < 1024 * 1024 -> "${bytesPerSecond / 1024} KB/s"
+            else -> String.format("%.1f MB/s", bytesPerSecond / (1024.0 * 1024.0))
+        }
+    }
 
     private fun connect(serverUrl: String, serverName: String, mode: String) {
         if (isRunning) {
@@ -153,12 +199,15 @@ class MimicVpnService : VpnService() {
         }
 
         try {
-            Log.d(TAG, "Setting up VPN interface for: $serverUrl")
+            Log.d(TAG, "Setting up VPN interface for: $serverUrl, mode: $mode")
 
             // Start foreground with connecting notification
             startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
 
-            // Setup VPN interface
+            // Initialize Go Mobile client
+            mimicClient = MimicClient()
+            
+            // Setup VPN interface FIRST (required for TUN mode)
             val builder = Builder()
             builder.addAddress(VPN_ADDRESS, 32)
             builder.addAddress(VPN_ADDRESS_V6, 128)
@@ -174,18 +223,32 @@ class MimicVpnService : VpnService() {
                 builder.setMetered(false)
             }
 
-            // Establish VPN interface
+            // Establish VPN interface and get file descriptor
             vpnInterface = builder.establish()
                 ?: throw IllegalStateException("Failed to establish VPN interface")
 
             Log.d(TAG, "VPN interface established successfully")
+            
+            // Start Go Mobile client with TUN mode
+            // The Go client will handle tun2socks internally
+            try {
+                val connectError = mimicClient?.connect(serverUrl, mode)
+                if (connectError != null && connectError.isNotEmpty()) {
+                    throw Exception("Go client error: $connectError")
+                }
+                Log.d(TAG, "Go Mobile client started successfully")
+            } catch (goException: Exception) {
+                Log.e(TAG, "Failed to start Go client: ${goException.message}", goException)
+                throw goException
+            }
+
             isRunning = true
 
             // Setup network callback for better connectivity
             setupNetworkCallback()
 
-            // Start packet forwarding thread
-            startPacketForwarding()
+            // Start stats polling for notification
+            startStatsPolling()
 
             // Update notification to connected
             updateNotification("Connected • ${formatServerName(serverName)}", serverName)
@@ -198,6 +261,8 @@ class MimicVpnService : VpnService() {
                     putExtra("server_name", serverName)
                 }
             )
+
+            Log.d(TAG, "VPN connection completed successfully")
 
         } catch (e: Exception) {
             Log.e(TAG, "Connection failed: ${e.message}", e)
@@ -214,9 +279,21 @@ class MimicVpnService : VpnService() {
     }
 
     fun disconnect() {
-        if (!isRunning) return
+        if (!isRunning && mimicClient == null) return
 
         Log.d(TAG, "Disconnecting VPN")
+        
+        // Stop stats polling
+        stopStatsPolling()
+        
+        // Stop Go Mobile client first
+        try {
+            mimicClient?.disconnect()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping Go client: ${e.message}")
+        }
+        mimicClient = null
+
         isRunning = false
 
         // Stop packet forwarding
@@ -279,33 +356,53 @@ class MimicVpnService : VpnService() {
         connectivityManager?.registerNetworkCallback(request, networkCallback!!)
     }
 
-    private fun startPacketForwarding() {
-        vpnExecutor = Executors.newScheduledThreadPool(1)
-
-        vpnExecutor?.scheduleAtFixedRate({
-            try {
-                // Read and forward packets
-                vpnInterface?.let { vpnFd ->
-                    FileInputStream(vpnFd.fileDescriptor).use { input ->
-                        val buffer = ByteArray(VPN_MTU)
-                        val bytesRead = input.read(buffer)
-                        if (bytesRead > 0) {
-                            Log.v(TAG, "Read $bytesRead bytes from VPN interface")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reading from VPN: ${e.message}")
-            }
-        }, 0, 100, TimeUnit.MILLISECONDS)
-
-        Log.d(TAG, "Packet forwarding started")
-    }
-
     private fun updateNotification(status: String, serverName: String = currentServerName) {
         val notification = createNotification(status, serverName)
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun startStatsPolling() {
+        stopStatsPolling()
+        statsTimer = java.util.Timer()
+        statsTimer?.scheduleAtFixedRate(object : java.util.TimerTask() {
+            override fun run() {
+                try {
+                    mimicClient?.let { client ->
+                        val stats = client.stats
+                        currentStats = stats
+                        
+                        val downloadStr = formatSpeed(stats.downloadSpeed)
+                        val uploadStr = formatSpeed(stats.uploadSpeed)
+                        val statusText = "Connected • ${formatServerName(currentServerName)}"
+                        
+                        updateNotificationWithStats(statusText, currentServerName, stats.downloadSpeed, stats.uploadSpeed)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error polling stats: ${e.message}")
+                }
+            }
+        }, 0, 1000) // Update every second
+    }
+
+    private fun stopStatsPolling() {
+        statsTimer?.cancel()
+        statsTimer = null
+    }
+
+    private fun updateNotificationWithStats(
+        status: String,
+        serverName: String,
+        downloadSpeed: Long,
+        uploadSpeed: Long
+    ) {
+        try {
+            val notification = createNotification(status, serverName, downloadSpeed, uploadSpeed)
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating notification: ${e.message}")
+        }
     }
 
     private fun formatServerName(name: String): String {

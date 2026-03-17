@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'providers/vpn_provider.dart';
 import 'providers/server_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
 import 'utils/app_theme.dart';
 
@@ -46,6 +47,14 @@ class MimicApp extends StatelessWidget {
             // Load servers on initialization
             serverProvider.loadServers();
             return serverProvider;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (context) {
+            final settingsProvider = SettingsProvider();
+            // Load settings on initialization
+            settingsProvider.loadSettings();
+            return settingsProvider;
           },
         ),
       ],

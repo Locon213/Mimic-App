@@ -18,83 +18,33 @@ env:
 
 jobs:
   # ============================================
-  # Build Go Mobile Libraries
-  # ============================================
-  build-mobile-libs:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Extract Version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.version }}" != "" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=dev-${{ github.sha }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install gomobile
-        run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
-          gomobile init
-          go get golang.org/x/mobile/bind@latest
-
-      - name: Build Android AAR
-        run: |
-          chmod +x scripts/build-mobile.sh
-          ./scripts/build-mobile.sh
-
-      - name: Upload Android AAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: mimic-android-aar
-          path: mobile/libs/mimic.aar
-
-  # ============================================
   # Build Flutter Android App
   # ============================================
   build-flutter-android:
     runs-on: ubuntu-latest
-    needs: build-mobile-libs
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@v3
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-
-      - name: Download Go Mobile Libraries
-        uses: actions/download-artifact@v4
-        with:
-          name: mimic-android-aar
-          path: mimic_app/android/app/libs/
 
       - name: Install gomobile for Flutter build
         run: |
@@ -119,7 +69,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: MimicApp-Android.apk
           path: mimic_app/build/app/outputs/flutter-apk/app-release.apk
@@ -131,15 +81,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@v3
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
@@ -174,7 +124,7 @@ jobs:
           zip -r ../../../MimicApp-iOS.ipa Payload
 
       - name: Upload iOS IPA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: MimicApp-iOS
           path: MimicApp-iOS.ipa
@@ -186,10 +136,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -199,7 +149,7 @@ jobs:
           refreshenv
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@v3
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
@@ -228,11 +178,14 @@ jobs:
         run: |
           mkdir dist
           cp build/windows/x64/runner/Release/mimic_app.exe dist/
-          cp build/windows/x64/runner/Release/data dist/
+          cp -r build/windows/x64/runner/Release/data dist/
+          # Copy all required DLLs from the build output
+          cp build/windows/x64/runner/Release/*.dll dist/
+          # Also copy the Go DLL
           cp ../desktop/libs/mimic.dll dist/
 
       - name: Upload Windows App
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: MimicApp-Windows
           path: mimic_app/dist/
@@ -244,15 +197,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@v3
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
@@ -287,7 +240,7 @@ jobs:
           cp ../desktop/libs/libmimic.so dist/
 
       - name: Upload Linux App
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: MimicApp-Linux
           path: mimic_app/dist/
@@ -299,15 +252,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@v3
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
@@ -343,7 +296,7 @@ jobs:
           cp ../desktop/libs/libmimic.dylib dist/
 
       - name: Upload macOS App
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: MimicApp-macOS
           path: mimic_app/dist/

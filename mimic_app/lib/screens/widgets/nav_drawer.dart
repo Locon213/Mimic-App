@@ -8,6 +8,7 @@ import '../../providers/vpn_provider.dart';
 import '../../providers/server_provider.dart';
 import '../../models/network_stats.dart';
 import '../../utils/app_theme.dart';
+import '../settings_screen.dart';
 
 /// Navigation Drawer - Side menu with app navigation
 class NavDrawer extends StatelessWidget {
@@ -114,16 +115,28 @@ class NavDrawer extends StatelessWidget {
           ),
           child: Column(
             children: [
+              // App Icon from assets
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
                   color: Colors.white24,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.security_rounded,
-                  size: 40,
-                  color: Colors.white,
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/icon.png',
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      // Fallback to shield icon if image not found
+                      return const Icon(
+                        Icons.shield_outlined,
+                        size: 40,
+                        color: Colors.white,
+                      );
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -246,7 +259,10 @@ class NavDrawer extends StatelessWidget {
   }
 
   void _showSettings(BuildContext context) {
-    // Navigate to settings screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
   }
 
   void _showAbout(BuildContext context) {
@@ -266,7 +282,7 @@ class NavDrawer extends StatelessWidget {
           padding: EdgeInsets.only(
             left: 24,
             right: 24,
-            top: isMobile ? 12 : 24, // Less padding on mobile
+            top: isMobile ? 12 : 24,
             bottom: MediaQuery.of(context).padding.bottom + 24,
           ),
           child: SingleChildScrollView(
@@ -284,17 +300,28 @@ class NavDrawer extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Logo
+                // App Icon from assets
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.security_rounded,
-                    size: 40,
-                    color: Colors.white,
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/icon.png',
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback to shield icon if image not found
+                        return const Icon(
+                          Icons.shield_outlined,
+                          size: 40,
+                          color: Colors.white,
+                        );
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -348,18 +375,26 @@ class NavDrawer extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
+                // GitHub Button - Fixed to open browser
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       final url = Uri.parse('https://github.com/Locon213/Mimic-App');
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      } else {
+                      try {
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          );
+                        } else {
+                          throw Exception('Cannot launch URL');
+                        }
+                      } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Could not open GitHub'),
+                            SnackBar(
+                              content: Text('Could not open GitHub: $e'),
                               backgroundColor: AppColors.error,
                             ),
                           );

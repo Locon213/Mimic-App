@@ -8,10 +8,11 @@ class AppColors {
   static const Color primaryLight = Color(0xFF333333);
   static const Color primaryDark = Color(0xFF000000);
 
-  // Status colors
-  static const Color connected = Color(0xFF000000);
-  static const Color disconnected = Color(0xFF666666);
-  static const Color connecting = Color(0xFF999999);
+  // Status colors - FIXED: Use visible colors for both themes
+  static const Color connected = Color(0xFF4CAF50); // Green for visibility
+  static const Color disconnected = Color(0xFF9E9E9E); // Gray
+  static const Color connecting = Color(0xFFFFA726); // Orange
+  static const Color error = Color(0xFFEF5350); // Red
 
   // Background colors (Dark theme)
   static const Color backgroundDark = Color(0xFF000000);
@@ -31,25 +32,24 @@ class AppColors {
   static const Color textDarkSecondary = Color(0xFFAAAAAA);
 
   // Accent colors
-  static const Color accent = Color(0xFF333333);
-  static const Color warning = Color(0xFF999999);
-  static const Color error = Color(0xFFCC0000);
+  static const Color accent = Color(0xFF42A5F5); // Blue for visibility
+  static const Color warning = Color(0xFFFFA726); // Orange
 
   // Card gradients
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, primaryLight],
+    colors: [Color(0xFF424242), Color(0xFF212121)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient connectedGradient = LinearGradient(
-    colors: [connected, Color(0xFF333333)],
+    colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient disconnectedGradient = LinearGradient(
-    colors: [Color(0xFF444444), Color(0xFF222222)],
+    colors: [Color(0xFF424242), Color(0xFF212121)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

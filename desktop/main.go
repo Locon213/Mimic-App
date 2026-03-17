@@ -21,12 +21,15 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/Locon213/Mimic-App/service"
 	"github.com/Locon213/Mimic-Protocol/pkg/client"
 	"github.com/Locon213/Mimic-Protocol/pkg/config"
 )
@@ -131,14 +134,34 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 	globalHolder.status.Store(int32(StatusConnected))
 	holderMu.Unlock()
 
+	// Start TUN mode if requested (for Desktop)
+	if strings.Contains(cMode, "TUN") {
+		go func() {
+			if err := service.StartTun2Socks(); err != nil {
+				fmt.Printf("Failed to start TUN: %v\n", err)
+			}
+		}()
+	}
+
+	// Set system proxy for Proxy mode on Desktop
+	if strings.Contains(cMode, "Proxy") {
+		setSystemProxy(true)
+	}
+
 	return C.CString("") // Empty string means success
 }
 
 //export MimicClient_Disconnect
 func MimicClient_Disconnect() {
+	// Reset system proxy
+	setSystemProxy(false)
+
+	// Stop TUN
+	service.StopTun2Socks()
+
 	holderMu.Lock()
 	defer holderMu.Unlock()
-	
+
 	if globalHolder != nil {
 		if globalHolder.cancel != nil {
 			globalHolder.cancel()
@@ -154,7 +177,7 @@ func MimicClient_Disconnect() {
 func MimicClient_IsConnected() C.int {
 	holderMu.Lock()
 	defer holderMu.Unlock()
-	
+
 	if globalHolder == nil {
 		return 0
 	}
@@ -168,7 +191,7 @@ func MimicClient_IsConnected() C.int {
 func MimicClient_GetStatus() C.int {
 	holderMu.Lock()
 	defer holderMu.Unlock()
-	
+
 	if globalHolder == nil {
 		return C.int(StatusDisconnected)
 	}
@@ -179,11 +202,11 @@ func MimicClient_GetStatus() C.int {
 func MimicClient_GetStats() C.NetworkStats {
 	holderMu.Lock()
 	defer holderMu.Unlock()
-	
+
 	if globalHolder == nil {
 		return C.NetworkStats{}
 	}
-	
+
 	return C.NetworkStats{
 		download_speed: C.int64_t(globalHolder.lastStats.DownloadSpeed),
 		upload_speed:   C.int64_t(globalHolder.lastStats.UploadSpeed),
@@ -198,7 +221,7 @@ func MimicClient_GetStats() C.NetworkStats {
 func MimicClient_GetServerName() *C.char {
 	holderMu.Lock()
 	defer holderMu.Unlock()
-	
+
 	if globalHolder == nil {
 		return C.CString("")
 	}
@@ -208,6 +231,21 @@ func MimicClient_GetServerName() *C.char {
 //export MimicClient_FreeString
 func MimicClient_FreeString(s *C.char) {
 	C.free(unsafe.Pointer(s))
+}
+
+//export MimicClient_FormatBytes
+func MimicClient_FormatBytes(bytes C.int64_t) *C.char {
+	b := int64(bytes)
+	const unit = 1024
+	if b < unit {
+		return C.CString(fmt.Sprintf("%d B", b))
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return C.CString(fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp]))
 }
 
 func extractServerName(url string) string {
@@ -227,19 +265,70 @@ func extractServerName(url string) string {
 	return "Unknown Server"
 }
 
-//export MimicClient_FormatBytes
-func MimicClient_FormatBytes(bytes C.int64_t) *C.char {
-	b := int64(bytes)
-	const unit = 1024
-	if b < unit {
-		return C.CString(fmt.Sprintf("%d B", b))
+// setSystemProxy sets or resets the system HTTP/SOCKS5 proxy
+func setSystemProxy(enable bool) {
+	if runtime.GOOS == "windows" {
+		setWindowsProxy(enable)
+	} else if runtime.GOOS == "darwin" {
+		setMacOSProxy(enable)
+	} else if runtime.GOOS == "linux" {
+		setLinuxProxy(enable)
 	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+}
+
+// setWindowsProxy configures proxy on Windows
+func setWindowsProxy(enable bool) {
+	if enable {
+		// Set HTTP proxy
+		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+			"/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f")
+		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+			"/v", "ProxyServer", "/d", "http=127.0.0.1:1081;socks=127.0.0.1:1080", "/f")
+	} else {
+		// Disable proxy
+		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+			"/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f")
 	}
-	return C.CString(fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp]))
+}
+
+// setMacOSProxy configures proxy on macOS
+func setMacOSProxy(enable bool) {
+	// Get network service name (typically "Wi-Fi" or "Ethernet")
+	service := "Wi-Fi"
+	if enable {
+		runCommand("networksetup", "-setwebproxy", service, "127.0.0.1", "1081")
+		runCommand("networksetup", "-setsecurewebproxy", service, "127.0.0.1", "1081")
+		runCommand("networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", "1080")
+	} else {
+		runCommand("networksetup", "-setwebproxystate", service, "off")
+		runCommand("networksetup", "-setsecurewebproxystate", service, "off")
+		runCommand("networksetup", "-setsocksfirewallproxystate", service, "off")
+	}
+}
+
+// setLinuxProxy configures proxy on Linux
+func setLinuxProxy(enable bool) {
+	// This sets proxy for GNOME desktop environment
+	if enable {
+		runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "manual")
+		runCommand("gsettings", "set", "org.gnome.system.proxy.http", "host", "127.0.0.1")
+		runCommand("gsettings", "set", "org.gnome.system.proxy.http", "port", "1081")
+		runCommand("gsettings", "set", "org.gnome.system.proxy.https", "host", "127.0.0.1")
+		runCommand("gsettings", "set", "org.gnome.system.proxy.https", "port", "1081")
+		runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
+		runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "port", "1080")
+	} else {
+		runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "none")
+	}
+}
+
+// runCommand runs a command silently (helper function)
+func runCommand(name string, args ...string) {
+	// Note: This is a simplified version. In production, you'd want proper error handling.
+	// For now, we just execute and ignore errors to prevent crashes.
+	// #nosec G204 - Command execution is intentional
+	cmd := exec.Command(name, args...)
+	_ = cmd.Run() // Ignore errors
 }
 
 func main() {}
