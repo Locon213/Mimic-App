@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.io.FileInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -30,9 +31,12 @@ class MimicVpnService : VpnService() {
         private const val VPN_MTU = 1500
         private const val VPN_ADDRESS = "10.0.0.1"
         private const val VPN_ADDRESS_V6 = "fd00::1"
-        
+
         const val EXTRA_SERVER_NAME = "server_name"
         const val EXTRA_SERVER_URL = "server_url"
+
+        var isVpnRunning: Boolean = false
+            private set
     }
 
     private val binder = LocalBinder()
@@ -81,7 +85,7 @@ class MimicVpnService : VpnService() {
         return binder
     }
 
-    override fun onUnbind(intent?: Intent?): Boolean {
+    override fun onUnbind(intent: Intent): Boolean {
         Log.d(TAG, "VpnService unbound")
         return super.onUnbind(intent)
     }
@@ -281,11 +285,13 @@ class MimicVpnService : VpnService() {
         vpnExecutor?.scheduleAtFixedRate({
             try {
                 // Read and forward packets
-                vpnInterface?.inputStream?.let { input ->
-                    val buffer = ByteArray(VPN_MTU)
-                    val bytesRead = input.read(buffer)
-                    if (bytesRead > 0) {
-                        Log.v(TAG, "Read $bytesRead bytes from VPN interface")
+                vpnInterface?.let { vpnFd ->
+                    FileInputStream(vpnFd.fileDescriptor).use { input ->
+                        val buffer = ByteArray(VPN_MTU)
+                        val bytesRead = input.read(buffer)
+                        if (bytesRead > 0) {
+                            Log.v(TAG, "Read $bytesRead bytes from VPN interface")
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -305,12 +311,6 @@ class MimicVpnService : VpnService() {
     private fun formatServerName(name: String): String {
         // Extract short name from full server name
         return if (name.length > 30) "${name.take(27)}..." else name
-    }
-
-    // Static methods for Flutter to call
-    companion object {
-        var isVpnRunning: Boolean = false
-            private set
     }
 }
 

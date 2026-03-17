@@ -126,3 +126,10 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# Install Go CGO library (libmimic.so)
+if(EXISTS "${CMAKE_SOURCE_DIR}/libmimic.so")
+  install(FILES "${CMAKE_SOURCE_DIR}/libmimic.so"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
