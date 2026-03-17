@@ -39,6 +39,10 @@ android {
     }
 }
 
+dependencies {
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+}
+
 flutter {
     source = "../.."
 }
