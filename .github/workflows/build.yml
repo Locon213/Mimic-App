@@ -168,9 +168,10 @@ jobs:
         run: |
           flutter build ios --release --no-codesign
           # Create IPA from .app
+          cd build/ios/iphoneos
           mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -r MimicApp-iOS.ipa Payload
+          cp -R Runner.app Payload/
+          zip -r ../../../MimicApp-iOS.ipa Payload
 
       - name: Upload iOS IPA
         uses: actions/upload-artifact@v4
@@ -228,7 +229,7 @@ jobs:
           mkdir dist
           cp build/windows/x64/runner/Release/mimic_app.exe dist/
           cp build/windows/x64/runner/Release/data dist/
-          cp build/windows/x64/runner/Release/mimic.dll dist/
+          cp ../desktop/libs/mimic.dll dist/
 
       - name: Upload Windows App
         uses: actions/upload-artifact@v4
@@ -283,7 +284,7 @@ jobs:
         run: |
           mkdir dist
           cp -r build/linux/x64/release/bundle/* dist/
-          cp desktop/libs/libmimic.so dist/
+          cp ../desktop/libs/libmimic.so dist/
 
       - name: Upload Linux App
         uses: actions/upload-artifact@v4
@@ -339,7 +340,7 @@ jobs:
         run: |
           mkdir dist
           cp -r build/macos/Build/Products/Release/mimic_app.app dist/
-          cp desktop/libs/libmimic.dylib dist/
+          cp ../desktop/libs/libmimic.dylib dist/
 
       - name: Upload macOS App
         uses: actions/upload-artifact@v4

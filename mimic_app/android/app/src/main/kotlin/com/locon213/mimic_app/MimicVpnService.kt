@@ -36,7 +36,7 @@ class MimicVpnService : VpnService() {
         const val EXTRA_SERVER_URL = "server_url"
 
         var isVpnRunning: Boolean = false
-            private set
+            internal set
     }
 
     private val binder = LocalBinder()
