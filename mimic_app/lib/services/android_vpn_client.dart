@@ -5,7 +5,7 @@ library;
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
-import 'network_stats.dart';
+import '../models/network_stats.dart';
 
 /// Android VpnService client for real VPN connections
 class AndroidVpnClient {
