@@ -33,7 +33,7 @@ dependencies:
   # Utilities
   intl: ^0.18.1
   url_launcher: ^6.2.1
-  package_info_plus: ^5.0.1
+  package_info_plus: ^9.0.0
   ffi: ^2.1.0
 
 dev_dependencies:
