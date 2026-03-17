@@ -276,27 +276,27 @@ jobs:
     needs: [build-flutter-android, build-flutter-ios, build-flutter-windows, build-flutter-linux, build-flutter-macos]
     steps:
       - name: Download Android APK
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: MimicApp-Android.apk
 
       - name: Download iOS IPA
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: MimicApp-iOS.ipa
 
       - name: Download Windows App
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: MimicApp-Windows.zip
 
       - name: Download Linux App
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: MimicApp-Linux.tar.gz
 
       - name: Download macOS App
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: MimicApp-macOS.zip
 
