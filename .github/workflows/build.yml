@@ -58,6 +58,7 @@ jobs:
         run: |
           chmod +x scripts/build-mobile.sh
           ./scripts/build-mobile.sh
+          mkdir -p mimic_app/android/app/libs
           cp mobile/libs/mimic.aar mimic_app/android/app/libs/
 
       - name: Install Flutter dependencies
