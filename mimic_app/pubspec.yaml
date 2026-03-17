@@ -21,7 +21,7 @@ dependencies:
   shimmer: ^3.0.0
   
   # Icons
-  font_awesome_flutter: ^10.6.0
+  font_awesome_flutter: ^11.0.0
   
   # Storage
   shared_preferences: ^2.2.2
