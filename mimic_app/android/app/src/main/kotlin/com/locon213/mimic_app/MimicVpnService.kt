@@ -233,7 +233,7 @@ class MimicVpnService : VpnService() {
             // The Go client will handle tun2socks internally
             try {
                 val connectError = mimicClient?.connect(serverUrl, mode)
-                if (connectError != null && connectError.isNotEmpty()) {
+                if (connectError != null && connectError != "") {
                     throw Exception("Go client error: $connectError")
                 }
                 Log.d(TAG, "Go Mobile client started successfully")
@@ -369,13 +369,13 @@ class MimicVpnService : VpnService() {
             override fun run() {
                 try {
                     mimicClient?.let { client ->
-                        val stats = client.stats
+                        val stats = client.getStats()
                         currentStats = stats
-                        
+
                         val downloadStr = formatSpeed(stats.downloadSpeed)
                         val uploadStr = formatSpeed(stats.uploadSpeed)
                         val statusText = "Connected • ${formatServerName(currentServerName)}"
-                        
+
                         updateNotificationWithStats(statusText, currentServerName, stats.downloadSpeed, stats.uploadSpeed)
                     }
                 } catch (e: Exception) {

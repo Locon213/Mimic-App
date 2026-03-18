@@ -169,6 +169,8 @@ jobs:
           .\scripts\build-desktop.ps1
           # Copy DLL to Windows runner directory
           Copy-Item -Path "desktop\libs\mimic.dll" -Destination "mimic_app\windows\runner\" -Force
+          # Copy wintun.dll for TUN mode support
+          Copy-Item -Path "desktop\libs\wintun.dll" -Destination "mimic_app\windows\runner\" -Force -ErrorAction SilentlyContinue
 
       - name: Build Windows
         working-directory: mimic_app
@@ -184,6 +186,8 @@ jobs:
           cp build/windows/x64/runner/Release/*.dll dist/
           # Also copy the Go DLL
           cp ../desktop/libs/mimic.dll dist/
+          # Copy wintun.dll for TUN mode
+          cp ../desktop/libs/wintun.dll dist/ -ErrorAction SilentlyContinue
 
       - name: Upload Windows App
         uses: actions/upload-artifact@v7

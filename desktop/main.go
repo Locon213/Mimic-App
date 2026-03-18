@@ -217,6 +217,25 @@ func MimicClient_GetStats() C.NetworkStats {
 	}
 }
 
+//export MimicClient_GetStatsLegacy
+func MimicClient_GetStatsLegacy() C.struct_NetworkStats {
+	holderMu.Lock()
+	defer holderMu.Unlock()
+
+	if globalHolder == nil {
+		return C.struct_NetworkStats{}
+	}
+
+	return C.struct_NetworkStats{
+		download_speed: C.int64_t(globalHolder.lastStats.DownloadSpeed),
+		upload_speed:   C.int64_t(globalHolder.lastStats.UploadSpeed),
+		ping:           C.int64_t(globalHolder.lastStats.Ping),
+		total_download: C.int64_t(globalHolder.lastStats.TotalDownload),
+		total_upload:   C.int64_t(globalHolder.lastStats.TotalUpload),
+		last_updated:   C.int64_t(globalHolder.lastStats.LastUpdated),
+	}
+}
+
 //export MimicClient_GetServerName
 func MimicClient_GetServerName() *C.char {
 	holderMu.Lock()
@@ -283,11 +302,25 @@ func setWindowsProxy(enable bool) {
 		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
 			"/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f")
 		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
-			"/v", "ProxyServer", "/d", "http=127.0.0.1:1081;socks=127.0.0.1:1080", "/f")
+			"/v", "ProxyServer", "/d", "127.0.0.1:1081", "/f")
+
+		// Wait for registry to update
+		time.Sleep(500 * time.Millisecond)
+
+		// Refresh Internet settings
+		runCommand("RUNDLL32.EXE", "wininet.dll,InternetSetOption", "0", "39", "0")
+		runCommand("RUNDLL32.EXE", "wininet.dll,InternetSetOption", "0", "37", "0")
 	} else {
 		// Disable proxy
 		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
 			"/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f")
+
+		// Wait for registry to update
+		time.Sleep(500 * time.Millisecond)
+
+		// Refresh Internet settings
+		runCommand("RUNDLL32.EXE", "wininet.dll,InternetSetOption", "0", "39", "0")
+		runCommand("RUNDLL32.EXE", "wininet.dll,InternetSetOption", "0", "37", "0")
 	}
 }
 

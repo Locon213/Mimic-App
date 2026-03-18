@@ -40,6 +40,34 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
+# Download wintun.dll for TUN mode support
+Write-Host "`n=== Downloading wintun.dll ===" -ForegroundColor Cyan
+$wintunUrl = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+$wintunZip = "$OutputDir\wintun.zip"
+$wintunExtracted = "$OutputDir\wintun-extracted"
+
+try {
+    Invoke-WebRequest -Uri $wintunUrl -OutFile $wintunZip
+    Expand-Archive -Path $wintunZip -DestinationPath $wintunExtracted -Force
+    
+    # Copy wintun.dll from extracted archive (x64 version)
+    $wintunSrc = "$wintunExtracted\wintun\bin\amd64\wintun.dll"
+    $wintunDst = "$OutputDir\wintun.dll"
+    if (Test-Path $wintunSrc) {
+        Copy-Item $wintunSrc $wintunDst -Force
+        Write-Host "✓ wintun.dll downloaded and copied to: $wintunDst" -ForegroundColor Green
+    } else {
+        Write-Host "⊘ wintun.dll not found in archive" -ForegroundColor Yellow
+    }
+    
+    # Cleanup
+    Remove-Item $wintunZip -Force -ErrorAction SilentlyContinue
+    Remove-Item $wintunExtracted -Recurse -Force -ErrorAction SilentlyContinue
+} catch {
+    Write-Host "⊘ Failed to download wintun.dll: $_" -ForegroundColor Yellow
+    Write-Host "  TUN mode will not work without wintun.dll" -ForegroundColor Yellow
+}
+
 # Reset environment
 Remove-Item Env:\CGO_ENABLED -ErrorAction SilentlyContinue
 Remove-Item Env:\GOOS -ErrorAction SilentlyContinue
