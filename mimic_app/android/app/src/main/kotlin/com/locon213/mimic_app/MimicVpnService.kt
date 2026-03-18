@@ -232,10 +232,7 @@ class MimicVpnService : VpnService() {
             // Start Go Mobile client with TUN mode
             // The Go client will handle tun2socks internally
             try {
-                val connectError = mimicClient?.connect(serverUrl, mode)
-                if (connectError != null && connectError != "") {
-                    throw Exception("Go client error: $connectError")
-                }
+                mimicClient?.connect(serverUrl, mode)
                 Log.d(TAG, "Go Mobile client started successfully")
             } catch (goException: Exception) {
                 Log.e(TAG, "Failed to start Go client: ${goException.message}", goException)
@@ -369,7 +366,7 @@ class MimicVpnService : VpnService() {
             override fun run() {
                 try {
                     mimicClient?.let { client ->
-                        val stats = client.getStats()
+                        val stats = client.stats
                         currentStats = stats
 
                         val downloadStr = formatSpeed(stats.downloadSpeed)

@@ -118,17 +118,17 @@ jobs:
         working-directory: mimic_app
         run: |
           flutter build ios --release --no-codesign
-          # Create IPA from .app
-          cd build/ios/iphoneos
-          mkdir -p Payload
-          cp -R Runner.app Payload/
-          zip -r ../../../MimicApp-iOS.ipa Payload
+          # Create IPA from the built .app bundle in a stable artifact location
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r MimicApp-iOS.ipa Payload
 
       - name: Upload iOS IPA
         uses: actions/upload-artifact@v7
         with:
           name: MimicApp-iOS
-          path: MimicApp-iOS.ipa
+          path: mimic_app/build/ios/ipa/MimicApp-iOS.ipa
 
   # ============================================
   # Build Flutter Windows App
