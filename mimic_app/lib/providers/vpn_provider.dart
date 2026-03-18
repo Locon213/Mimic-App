@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import '../models/network_stats.dart' as models;
+import '../models/log_entry.dart';
 import '../models/network_stats.dart';
 import '../models/server_config.dart';
+import 'logs_provider.dart';
 import '../services/android_vpn_client.dart';
 
 /// VPN Provider - Manages VPN connection state and statistics
@@ -14,6 +16,7 @@ class VpnProvider extends ChangeNotifier {
   String _mode = 'TUN'; // Default to TUN
   String? _error;
   final _vpnClient = AndroidVpnClient.instance;
+  final _logs = LogsProvider.instance;
 
   // Getters
   ConnectionStatus get status => _status;
@@ -44,6 +47,11 @@ class VpnProvider extends ChangeNotifier {
   /// Connect to a server
   Future<void> connect(ServerConfig server, {String? mode}) async {
     try {
+      _logs.info(
+        LogCategory.vpn,
+        'Connection requested',
+        'Connecting to ${server.displayName} using ${mode ?? _mode} mode.',
+      );
       _status = ConnectionStatus.connecting;
       _currentServer = server;
       if (mode != null) {
@@ -60,6 +68,11 @@ class VpnProvider extends ChangeNotifier {
       );
 
       _status = ConnectionStatus.connected;
+      _logs.info(
+        LogCategory.vpn,
+        'Connected',
+        'VPN connected to ${server.displayName}.',
+      );
 
       // Set stats callback
       _vpnClient.setStatsCallback((stats) {
@@ -72,6 +85,11 @@ class VpnProvider extends ChangeNotifier {
     } catch (e) {
       _status = ConnectionStatus.disconnected;
       _error = e.toString();
+      _logs.error(
+        LogCategory.vpn,
+        'Connection failed',
+        e.toString(),
+      );
       notifyListeners();
       rethrow;
     }
@@ -80,16 +98,27 @@ class VpnProvider extends ChangeNotifier {
   /// Disconnect from current server
   Future<void> disconnect() async {
     try {
+      final serverName = _currentServer?.displayName ?? 'current server';
       // Disconnect via VpnService
       await _vpnClient.disconnect();
 
       _status = ConnectionStatus.disconnected;
       _stats = models.NetworkStats();
       _currentServer = null;
+      _logs.info(
+        LogCategory.vpn,
+        'Disconnected',
+        'VPN disconnected from $serverName.',
+      );
       notifyListeners();
 
     } catch (e) {
       _error = e.toString();
+      _logs.error(
+        LogCategory.vpn,
+        'Disconnect failed',
+        e.toString(),
+      );
       notifyListeners();
     }
   }
@@ -97,8 +126,18 @@ class VpnProvider extends ChangeNotifier {
   /// Set connection mode (only when disconnected)
   Future<void> setMode(String newMode) async {
     if (isConnected || isConnecting) {
+      _logs.warning(
+        LogCategory.ui,
+        'Mode change blocked',
+        'Cannot change VPN mode while a connection is active.',
+      );
       throw Exception('Cannot change mode while connected');
     }
+    _logs.info(
+      LogCategory.ui,
+      'Mode changed',
+      'Desktop VPN mode switched to $newMode.',
+    );
     _mode = newMode;
     notifyListeners();
   }

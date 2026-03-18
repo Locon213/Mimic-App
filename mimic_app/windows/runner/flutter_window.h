@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "desktop_log_bridge.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.

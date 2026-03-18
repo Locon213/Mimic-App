@@ -5,15 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 
+import 'models/log_entry.dart';
 import 'providers/vpn_provider.dart';
 import 'providers/server_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/logs_provider.dart';
+import 'services/native_logs_service.dart';
 import 'screens/home_screen.dart';
 import 'utils/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LogsProvider.instance.info(
+    LogCategory.system,
+    'App started',
+    'Mimic UI initialized and providers are loading.',
+  );
+  NativeLogsService.instance.start();
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
@@ -40,6 +49,7 @@ class MimicApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider.value(value: LogsProvider.instance),
         ChangeNotifierProvider(create: (_) => VpnProvider()),
         ChangeNotifierProvider(
           create: (context) {

@@ -140,6 +140,7 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 
 	// Start TUN mode if requested (for Desktop)
 	if strings.Contains(cMode, "TUN") {
+		service.ConfigureTunRemoteAddress(cfg.Server)
 		go func() {
 			if err := service.StartTun2Socks(); err != nil {
 				fmt.Printf("Failed to start TUN: %v\n", err)
@@ -385,24 +386,25 @@ func setLinuxProxy(enable bool) {
 		}
 	}
 
-	if !commandExists("gsettings") {
-		log.Println("gsettings is not available; Linux proxy configuration is limited to environment variables")
-		return
+	if commandExists("gsettings") {
+		// Configure GNOME-compatible desktop environments when available.
+		if enable {
+			runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "manual")
+			runCommand("gsettings", "set", "org.gnome.system.proxy.http", "host", "127.0.0.1")
+			runCommand("gsettings", "set", "org.gnome.system.proxy.http", "port", "1081")
+			runCommand("gsettings", "set", "org.gnome.system.proxy.https", "host", "127.0.0.1")
+			runCommand("gsettings", "set", "org.gnome.system.proxy.https", "port", "1081")
+			runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
+			runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "port", "1080")
+			runCommand("gsettings", "set", "org.gnome.system.proxy", "ignore-hosts", "['localhost', '127.0.0.1', '::1']")
+		} else {
+			runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "none")
+		}
+	} else {
+		log.Println("gsettings is not available; skipping GNOME proxy configuration")
 	}
 
-	// Configure GNOME-compatible desktop environments when available.
-	if enable {
-		runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "manual")
-		runCommand("gsettings", "set", "org.gnome.system.proxy.http", "host", "127.0.0.1")
-		runCommand("gsettings", "set", "org.gnome.system.proxy.http", "port", "1081")
-		runCommand("gsettings", "set", "org.gnome.system.proxy.https", "host", "127.0.0.1")
-		runCommand("gsettings", "set", "org.gnome.system.proxy.https", "port", "1081")
-		runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
-		runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "port", "1080")
-		runCommand("gsettings", "set", "org.gnome.system.proxy", "ignore-hosts", "['localhost', '127.0.0.1', '::1']")
-	} else {
-		runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "none")
-	}
+	setKDEProxy(enable)
 }
 
 func listMacOSNetworkServices() []string {
@@ -427,9 +429,51 @@ func listMacOSNetworkServices() []string {
 	return services
 }
 
+func setKDEProxy(enable bool) {
+	bin := firstAvailableCommand("kwriteconfig6", "kwriteconfig5")
+	if bin == "" {
+		return
+	}
+
+	if enable {
+		runCommand(bin, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "1")
+		runCommand(bin, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpProxy", "http://127.0.0.1 1081")
+		runCommand(bin, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpsProxy", "http://127.0.0.1 1081")
+		runCommand(bin, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy", "socks://127.0.0.1 1080")
+		runCommand(bin, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "NoProxyFor", "localhost,127.0.0.1,::1")
+	} else {
+		runCommand(bin, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "0")
+	}
+
+	notifyKDEProxyReload()
+}
+
+func notifyKDEProxyReload() {
+	if commandExists("qdbus6") {
+		runCommand("qdbus6", "org.kde.KIO.Scheduler", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "")
+		return
+	}
+	if commandExists("qdbus") {
+		runCommand("qdbus", "org.kde.KIO.Scheduler", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "")
+		return
+	}
+	if commandExists("dbus-send") {
+		runCommand("dbus-send", "--session", "--dest=org.kde.KIO.Scheduler", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "string:")
+	}
+}
+
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+func firstAvailableCommand(names ...string) string {
+	for _, name := range names {
+		if commandExists(name) {
+			return name
+		}
+	}
+	return ""
 }
 
 func runCommandOutput(name string, args ...string) (string, error) {

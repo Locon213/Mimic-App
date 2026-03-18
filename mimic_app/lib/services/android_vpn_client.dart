@@ -5,7 +5,9 @@ library;
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
+import '../models/log_entry.dart';
 import '../models/network_stats.dart';
+import '../providers/logs_provider.dart';
 
 /// Android VpnService client for real VPN connections
 class AndroidVpnClient {
@@ -33,6 +35,7 @@ class AndroidVpnClient {
   Function(NetworkStats)? _statsCallback;
   Timer? _statsTimer;
   StreamSubscription? _eventSubscription;
+  final LogsProvider _logs = LogsProvider.instance;
 
   /// Check if platform is Android
   bool get isAndroid => Platform.isAndroid;
@@ -42,9 +45,19 @@ class AndroidVpnClient {
     if (!isAndroid) return false;
 
     try {
+      _logs.info(
+        LogCategory.system,
+        'VPN permission check',
+        'Requesting Android VpnService preparation state.',
+      );
       final result = await _channel.invokeMethod<bool>('prepareVpn');
       return result ?? false;
     } catch (e) {
+      _logs.error(
+        LogCategory.system,
+        'VPN permission check failed',
+        e.toString(),
+      );
       throw Exception('Failed to prepare VPN: $e');
     }
   }
@@ -63,6 +76,11 @@ class AndroidVpnClient {
     _status = 1; // connecting
 
     try {
+      _logs.info(
+        LogCategory.mimicProtocol,
+        'Native connect',
+        'Calling platform channel for ${_serverName ?? serverUrl} in $mode mode.',
+      );
       // Connect to VPN (permission will be requested if needed)
       await _channel.invokeMethod('connectVpn', {
         'serverUrl': serverUrl,
@@ -75,6 +93,11 @@ class AndroidVpnClient {
       _setupEventListener();
     } catch (e) {
       _status = 0;
+      _logs.error(
+        LogCategory.mimicProtocol,
+        'Native connect failed',
+        e.toString(),
+      );
       throw Exception('Failed to connect to VPN: $e');
     }
   }
@@ -92,7 +115,11 @@ class AndroidVpnClient {
     try {
       await _channel.invokeMethod('disconnectVpn');
     } catch (e) {
-      // Ignore errors on disconnect
+      _logs.warning(
+        LogCategory.mimicProtocol,
+        'Native disconnect warning',
+        e.toString(),
+      );
     }
 
     _stopStatsPolling();
@@ -146,17 +173,31 @@ class AndroidVpnClient {
             _status = 2;
             _serverUrl = event['serverUrl'] as String?;
             _serverName = event['serverName'] as String?;
+            _logs.info(
+              LogCategory.system,
+              'Android VPN event',
+              'Platform reported connected state.',
+            );
             break;
           case 'disconnected':
             _status = 0;
             _serverUrl = null;
             _serverName = null;
             _stopStatsPolling();
+            _logs.info(
+              LogCategory.system,
+              'Android VPN event',
+              'Platform reported disconnected state.',
+            );
             break;
           case 'error':
             _status = 0;
             final error = event['error'] as String?;
-            print('VPN Error: $error');
+            _logs.error(
+              LogCategory.system,
+              'Android VPN error',
+              error ?? 'Unknown VPN platform error',
+            );
             break;
         }
       }
@@ -186,6 +227,11 @@ class AndroidVpnClient {
     _status = 2;
     _serverUrl = serverUrl;
     _mode = mode;
+    _logs.warning(
+      LogCategory.system,
+      'Mock VPN session',
+      'Using mock VPN connection on a non-Android platform.',
+    );
     _startStatsPolling();
   }
 

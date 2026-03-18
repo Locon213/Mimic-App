@@ -159,6 +159,7 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 
 	// Start TUN if needed
 	if strings.Contains(mode, "TUN") {
+		service.ConfigureTunRemoteAddress(cfg.Server)
 		if err := service.StartTun2Socks(); err != nil {
 			m.client.Stop()
 			m.status.Store(int32(StatusDisconnected))

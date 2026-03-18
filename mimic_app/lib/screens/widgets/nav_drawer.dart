@@ -6,8 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../providers/server_provider.dart';
-import '../../models/network_stats.dart';
 import '../../utils/app_theme.dart';
+import '../logs_screen.dart';
 import '../settings_screen.dart';
 
 /// Navigation Drawer - Side menu with app navigation
@@ -45,6 +45,16 @@ class NavDrawer extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(context);
                       // Navigate to servers screen (if created)
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.receipt_long_rounded,
+                    label: 'Logs',
+                    subtitle: 'VPN, protocol and system events',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showLogs(context);
                     },
                   ),
                   _buildMenuItem(
@@ -262,6 +272,13 @@ class NavDrawer extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+  }
+
+  void _showLogs(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LogsScreen()),
     );
   }
 

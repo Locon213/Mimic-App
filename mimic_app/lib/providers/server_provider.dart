@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/log_entry.dart';
 import '../models/server_config.dart';
+import 'logs_provider.dart';
 
 /// Server Provider - Manages saved server configurations
 class ServerProvider extends ChangeNotifier {
@@ -9,6 +11,7 @@ class ServerProvider extends ChangeNotifier {
   ServerConfig? _selectedServer;
   bool _isLoading = false;
   String? _loadError;
+  final _logs = LogsProvider.instance;
 
   // Getters
   List<ServerConfig> get servers => _servers;
@@ -51,6 +54,11 @@ class ServerProvider extends ChangeNotifier {
       });
 
       debugPrint('Loaded ${_servers.length} servers successfully');
+      _logs.info(
+        LogCategory.system,
+        'Servers loaded',
+        'Loaded ${_servers.length} saved server profiles.',
+      );
 
       // Restore selected server if any
       if (_servers.isNotEmpty) {
@@ -67,6 +75,11 @@ class ServerProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error loading servers: $e');
+      _logs.error(
+        LogCategory.system,
+        'Load servers failed',
+        e.toString(),
+      );
       _loadError = e.toString();
       _servers = [];
       _selectedServer = null;
@@ -95,6 +108,11 @@ class ServerProvider extends ChangeNotifier {
   /// Add a new server
   Future<void> addServer(ServerConfig server) async {
     debugPrint('Adding server: ${server.displayName} (${server.url})');
+    _logs.info(
+      LogCategory.ui,
+      'Server added',
+      'Added server profile ${server.displayName}.',
+    );
     _servers.add(server);
     await saveServers();
     notifyListeners();
@@ -116,6 +134,11 @@ class ServerProvider extends ChangeNotifier {
   /// Delete a server
   Future<void> deleteServer(String serverId) async {
     debugPrint('Deleting server: $serverId');
+    _logs.info(
+      LogCategory.ui,
+      'Server deleted',
+      'Deleted saved server profile $serverId.',
+    );
     _servers.removeWhere((s) => s.id == serverId);
 
     if (_selectedServer?.id == serverId) {
@@ -130,6 +153,11 @@ class ServerProvider extends ChangeNotifier {
   /// Select a server
   void selectServer(ServerConfig server) async {
     debugPrint('Selecting server: ${server.displayName}');
+    _logs.info(
+      LogCategory.ui,
+      'Server selected',
+      'Selected ${server.displayName} as the active server.',
+    );
     _selectedServer = server;
     
     // Save selected server ID
@@ -138,6 +166,11 @@ class ServerProvider extends ChangeNotifier {
       await prefs.setString('selected_server_id', server.id);
     } catch (e) {
       debugPrint('Error saving selected server: $e');
+      _logs.warning(
+        LogCategory.system,
+        'Persist selected server failed',
+        e.toString(),
+      );
     }
     
     notifyListeners();
@@ -167,6 +200,11 @@ class ServerProvider extends ChangeNotifier {
       debugPrint('Imported ${importedServers.length} servers');
     } catch (e) {
       debugPrint('Error importing servers: $e');
+      _logs.error(
+        LogCategory.ui,
+        'Import servers failed',
+        e.toString(),
+      );
       rethrow;
     }
   }

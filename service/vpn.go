@@ -115,6 +115,7 @@ func (v *VpnService) StartService(serverUrl string, mode string) error {
 	// Start TUN if needed
 	if strings.Contains(mode, "TUN") {
 		log.Println("TUN mode selected. Starting tun2socks...")
+		ConfigureTunRemoteAddress(v.serverAddress)
 		err := StartTun2Socks()
 		if err != nil {
 			log.Printf("Failed to start TUN network: %v\n", err)

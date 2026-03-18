@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -16,6 +17,13 @@ import (
 )
 
 var tunRunning atomic.Bool
+
+var (
+	tunRemoteMu    sync.RWMutex
+	tunRemoteAddr  string
+	linuxBypassMu  sync.Mutex
+	linuxBypassCfg linuxBypassRoute
+)
 
 const (
 	windowsTunName      = "MimicTUN"
@@ -29,6 +37,25 @@ const (
 	tunIPv4CIDR         = "10.0.0.2/24"
 	tunIPv4Peer         = "10.0.0.1"
 )
+
+type linuxBypassRoute struct {
+	destination string
+	via         string
+	dev         string
+	ipv6        bool
+}
+
+func ConfigureTunRemoteAddress(remote string) {
+	tunRemoteMu.Lock()
+	defer tunRemoteMu.Unlock()
+	tunRemoteAddr = strings.TrimSpace(remote)
+}
+
+func configuredTunRemoteAddress() string {
+	tunRemoteMu.RLock()
+	defer tunRemoteMu.RUnlock()
+	return tunRemoteAddr
+}
 
 // StartTun2Socks starts tun2socks tunneling to the local Mimic SOCKS5 proxy.
 func StartTun2Socks() error {
@@ -333,6 +360,13 @@ func setupLinuxTun() error {
 	if err := runSystemCommand("ip", "-6", "addr", "replace", windowsTunIPv6CIDR, "dev", iface.Name); err != nil {
 		log.Printf("Warning: failed to assign Linux TUN IPv6: %v", err)
 	}
+	if bypass, err := discoverLinuxBypassRoute(); err != nil {
+		log.Printf("Warning: failed to discover Linux bypass route for VPN server: %v", err)
+	} else if bypass.destination != "" {
+		if err := addLinuxBypassRoute(bypass); err != nil {
+			log.Printf("Warning: failed to install Linux bypass route: %v", err)
+		}
+	}
 	if err := runSystemCommand("ip", "route", "replace", "0.0.0.0/1", "dev", iface.Name, "metric", "1"); err != nil {
 		return fmt.Errorf("add Linux split route 0.0.0.0/1: %w", err)
 	}
@@ -345,6 +379,7 @@ func setupLinuxTun() error {
 	if err := runSystemCommand("ip", "-6", "route", "replace", "8000::/1", "dev", iface.Name, "metric", "1"); err != nil {
 		log.Printf("Warning: failed to add Linux IPv6 split route 8000::/1: %v", err)
 	}
+	configureLinuxResolved(iface.Name, true)
 
 	log.Printf("Linux TUN configured on %s", iface.Name)
 	return nil
@@ -379,15 +414,133 @@ func cleanupLinuxTun() {
 		return
 	}
 
+	configureLinuxResolved(iface.Name, false)
 	_ = runSystemCommand("ip", "route", "del", "0.0.0.0/1", "dev", iface.Name)
 	_ = runSystemCommand("ip", "route", "del", "128.0.0.0/1", "dev", iface.Name)
 	_ = runSystemCommand("ip", "-6", "route", "del", "::/1", "dev", iface.Name)
 	_ = runSystemCommand("ip", "-6", "route", "del", "8000::/1", "dev", iface.Name)
+	removeLinuxBypassRoute()
 }
 
 func cleanupMacOSTun() {
 	_ = runSystemCommand("route", "-n", "delete", "-inet", "0.0.0.0/1")
 	_ = runSystemCommand("route", "-n", "delete", "-inet", "128.0.0.0/1")
+}
+
+func discoverLinuxBypassRoute() (linuxBypassRoute, error) {
+	remote := configuredTunRemoteAddress()
+	if remote == "" {
+		return linuxBypassRoute{}, nil
+	}
+
+	host := remote
+	if parsedHost, _, err := net.SplitHostPort(remote); err == nil {
+		host = parsedHost
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return linuxBypassRoute{}, fmt.Errorf("resolve remote host %q: %w", host, err)
+	}
+
+	for _, ip := range ips {
+		route, routeErr := linuxRouteGet(ip.String())
+		if routeErr == nil {
+			return route, nil
+		}
+	}
+
+	return linuxBypassRoute{}, fmt.Errorf("no usable route found for %q", host)
+}
+
+func linuxRouteGet(destination string) (linuxBypassRoute, error) {
+	args := []string{"route", "get", destination}
+	if strings.Contains(destination, ":") {
+		args = []string{"-6", "route", "get", destination}
+	}
+
+	output, err := runSystemCommandOutput("ip", args...)
+	if err != nil {
+		return linuxBypassRoute{}, err
+	}
+
+	fields := strings.Fields(output)
+	route := linuxBypassRoute{ipv6: strings.Contains(destination, ":")}
+	for i := 0; i < len(fields); i++ {
+		switch fields[i] {
+		case "via":
+			if i+1 < len(fields) {
+				route.via = fields[i+1]
+			}
+		case "dev":
+			if i+1 < len(fields) {
+				route.dev = fields[i+1]
+			}
+		}
+	}
+
+	if route.via == "" || route.dev == "" {
+		return linuxBypassRoute{}, fmt.Errorf("unexpected ip route output for %q: %s", destination, strings.TrimSpace(output))
+	}
+
+	if route.ipv6 {
+		route.destination = destination + "/128"
+	} else {
+		route.destination = destination + "/32"
+	}
+
+	return route, nil
+}
+
+func addLinuxBypassRoute(route linuxBypassRoute) error {
+	if route.destination == "" {
+		return nil
+	}
+
+	args := []string{"route", "replace", route.destination, "via", route.via, "dev", route.dev, "metric", "1"}
+	if route.ipv6 {
+		args = append([]string{"-6"}, args...)
+	}
+	if err := runSystemCommand("ip", args...); err != nil {
+		return err
+	}
+
+	linuxBypassMu.Lock()
+	linuxBypassCfg = route
+	linuxBypassMu.Unlock()
+	return nil
+}
+
+func removeLinuxBypassRoute() {
+	linuxBypassMu.Lock()
+	route := linuxBypassCfg
+	linuxBypassCfg = linuxBypassRoute{}
+	linuxBypassMu.Unlock()
+
+	if route.destination == "" {
+		return
+	}
+
+	args := []string{"route", "del", route.destination, "via", route.via, "dev", route.dev}
+	if route.ipv6 {
+		args = append([]string{"-6"}, args...)
+	}
+	_ = runSystemCommand("ip", args...)
+}
+
+func configureLinuxResolved(linkName string, enable bool) {
+	if !commandExistsInPath("resolvectl") {
+		return
+	}
+
+	if enable {
+		_ = runSystemCommand("resolvectl", "dns", linkName, "1.1.1.1", "8.8.8.8")
+		_ = runSystemCommand("resolvectl", "domain", linkName, "~.")
+		_ = runSystemCommand("resolvectl", "default-route", linkName, "yes")
+		return
+	}
+
+	_ = runSystemCommand("resolvectl", "revert", linkName)
 }
 
 func isTunInterfaceName(name string) bool {
@@ -402,6 +555,15 @@ func runWindowsCommand(name string, args ...string) error {
 	return runSystemCommand(name, args...)
 }
 
+func runSystemCommandOutput(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s %s failed: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return string(output), nil
+}
+
 func runSystemCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
@@ -412,6 +574,11 @@ func runSystemCommand(name string, args ...string) error {
 		log.Printf("%s output: %s", name, trimmed)
 	}
 	return nil
+}
+
+func commandExistsInPath(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
 }
 
 // IsTunRunning returns true if TUN is currently running

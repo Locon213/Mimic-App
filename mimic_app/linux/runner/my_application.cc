@@ -14,8 +14,29 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+static FlEventChannel* native_log_channel = nullptr;
+
+static void emit_native_log(const gchar* level,
+                            const gchar* source,
+                            const gchar* message) {
+  if (native_log_channel == nullptr) {
+    return;
+  }
+
+  g_autoptr(FlValue) event = fl_value_new_map();
+  fl_value_set_string_take(event, "level", fl_value_new_string(level));
+  fl_value_set_string_take(event, "source", fl_value_new_string(source));
+  fl_value_set_string_take(event, "message", fl_value_new_string(message));
+  fl_value_set_string_take(
+      event, "timestamp",
+      fl_value_new_int(g_get_real_time() / 1000));
+
+  fl_event_channel_send(native_log_channel, event, nullptr, nullptr);
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
+  emit_native_log("info", "LinuxRunner", "First Flutter frame rendered.");
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
@@ -75,6 +96,12 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  g_autoptr(FlStandardMethodCodec) event_codec = fl_standard_method_codec_new();
+  native_log_channel = fl_event_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "com.locon213.mimic_app/native_logs", FL_METHOD_CODEC(event_codec));
+  emit_native_log("info", "LinuxRunner", "Flutter engine initialized for desktop runner.");
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
@@ -113,6 +140,8 @@ static void my_application_shutdown(GApplication* application) {
   // MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application shutdown.
+  emit_native_log("info", "LinuxRunner", "Desktop application shutdown requested.");
+  g_clear_object(&native_log_channel);
 
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
 }

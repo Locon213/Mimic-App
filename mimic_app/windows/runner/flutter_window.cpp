@@ -25,9 +25,14 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  DesktopLogBridge::GetInstance().Attach(flutter_controller_->engine()->messenger());
+  DesktopLogBridge::GetInstance().Emit(
+      "info", "WindowsRunner", "Flutter engine initialized for desktop window.");
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    DesktopLogBridge::GetInstance().Emit(
+        "info", "WindowsRunner", "First Flutter frame rendered.");
     this->Show();
   });
 
@@ -40,6 +45,8 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  DesktopLogBridge::GetInstance().Emit(
+      "info", "WindowsRunner", "Desktop window is being destroyed.");
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -63,6 +70,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_FONTCHANGE:
+      DesktopLogBridge::GetInstance().Emit(
+          "debug", "WindowsRunner", "System fonts changed; reloading fonts.");
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
   }

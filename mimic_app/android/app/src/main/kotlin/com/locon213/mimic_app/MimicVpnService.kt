@@ -65,11 +65,13 @@ class MimicVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "VpnService created")
+        NativeLogBridge.info(TAG, "VpnService created")
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "VpnService started with action: ${intent?.action}")
+        NativeLogBridge.info(TAG, "VpnService started with action: ${intent?.action}")
 
         when (intent?.action) {
             ACTION_CONNECT -> {
@@ -91,16 +93,19 @@ class MimicVpnService : VpnService() {
 
     override fun onBind(intent: Intent?): IBinder? {
         Log.d(TAG, "VpnService bound")
+        NativeLogBridge.debug(TAG, "VpnService bound")
         return binder
     }
 
     override fun onUnbind(intent: Intent): Boolean {
         Log.d(TAG, "VpnService unbound")
+        NativeLogBridge.debug(TAG, "VpnService unbound")
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         Log.d(TAG, "VpnService destroyed")
+        NativeLogBridge.info(TAG, "VpnService destroyed")
         disconnect()
         super.onDestroy()
     }
@@ -195,11 +200,13 @@ class MimicVpnService : VpnService() {
     private fun connect(serverUrl: String, serverName: String, mode: String) {
         if (isRunning) {
             Log.w(TAG, "Already running")
+            NativeLogBridge.warning(TAG, "Connect ignored because VPN is already running")
             return
         }
 
         try {
             Log.d(TAG, "Setting up VPN interface for: $serverUrl, mode: $mode")
+            NativeLogBridge.info(TAG, "Setting up VPN interface for $serverName in $mode mode")
 
             // Start foreground with connecting notification
             startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
@@ -228,14 +235,17 @@ class MimicVpnService : VpnService() {
                 ?: throw IllegalStateException("Failed to establish VPN interface")
 
             Log.d(TAG, "VPN interface established successfully")
+            NativeLogBridge.info(TAG, "VPN interface established successfully")
             
             // Start Go Mobile client with TUN mode
             // The Go client will handle tun2socks internally
             try {
                 mimicClient?.connect(serverUrl, mode)
                 Log.d(TAG, "Go Mobile client started successfully")
+                NativeLogBridge.info(TAG, "Go Mobile client started successfully")
             } catch (goException: Exception) {
                 Log.e(TAG, "Failed to start Go client: ${goException.message}", goException)
+                NativeLogBridge.error(TAG, "Failed to start Go client: ${goException.message}")
                 throw goException
             }
 
@@ -260,9 +270,11 @@ class MimicVpnService : VpnService() {
             )
 
             Log.d(TAG, "VPN connection completed successfully")
+            NativeLogBridge.info(TAG, "VPN connection completed successfully")
 
         } catch (e: Exception) {
             Log.e(TAG, "Connection failed: ${e.message}", e)
+            NativeLogBridge.error(TAG, "Connection failed: ${e.message}")
             updateNotification("Connection failed: ${e.message}")
             disconnect()
 
@@ -279,6 +291,7 @@ class MimicVpnService : VpnService() {
         if (!isRunning && mimicClient == null) return
 
         Log.d(TAG, "Disconnecting VPN")
+        NativeLogBridge.info(TAG, "Disconnecting VPN session")
         
         // Stop stats polling
         stopStatsPolling()
@@ -288,6 +301,7 @@ class MimicVpnService : VpnService() {
             mimicClient?.disconnect()
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping Go client: ${e.message}")
+            NativeLogBridge.error(TAG, "Error stopping Go client: ${e.message}")
         }
         mimicClient = null
 
@@ -302,6 +316,7 @@ class MimicVpnService : VpnService() {
             vpnInterface?.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error closing VPN interface: ${e.message}")
+            NativeLogBridge.error(TAG, "Error closing VPN interface: ${e.message}")
         }
         vpnInterface = null
 
@@ -323,6 +338,7 @@ class MimicVpnService : VpnService() {
         )
 
         Log.d(TAG, "VPN disconnected")
+        NativeLogBridge.info(TAG, "VPN disconnected")
     }
 
     private fun setupNetworkCallback() {
@@ -335,10 +351,12 @@ class MimicVpnService : VpnService() {
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 Log.d(TAG, "Network available")
+                NativeLogBridge.debug(TAG, "Network available")
             }
 
             override fun onLost(network: Network) {
                 Log.d(TAG, "Network lost")
+                NativeLogBridge.warning(TAG, "Network lost")
             }
 
             override fun onCapabilitiesChanged(
@@ -347,6 +365,7 @@ class MimicVpnService : VpnService() {
             ) {
                 val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 Log.d(TAG, "Network capabilities changed, has internet: $hasInternet")
+                NativeLogBridge.debug(TAG, "Network capabilities changed, has internet: $hasInternet")
             }
         }
 
@@ -366,7 +385,7 @@ class MimicVpnService : VpnService() {
             override fun run() {
                 try {
                     mimicClient?.let { client ->
-                        val stats = client.getStats()
+                        val stats = client.GetStats()
                         currentStats = stats
 
                         val statusText = "Connected • ${formatServerName(currentServerName)}"
@@ -375,6 +394,7 @@ class MimicVpnService : VpnService() {
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error polling stats: ${e.message}")
+                    NativeLogBridge.error(TAG, "Error polling stats: ${e.message}")
                 }
             }
         }, 0, 1000) // Update every second
@@ -397,6 +417,7 @@ class MimicVpnService : VpnService() {
             notificationManager.notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             Log.e(TAG, "Error updating notification: ${e.message}")
+            NativeLogBridge.error(TAG, "Error updating notification: ${e.message}")
         }
     }
 

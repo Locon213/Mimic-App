@@ -5,6 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../providers/vpn_provider.dart';
 import '../providers/server_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/logs_provider.dart';
+import '../models/log_entry.dart';
 import '../utils/app_theme.dart';
 import 'widgets/connection_tile.dart';
 import 'widgets/stats_card.dart';
@@ -238,12 +240,23 @@ class _HomeScreenState extends State<HomeScreen>
   void _handleConnect() {
     final serverProvider = context.read<ServerProvider>();
     final vpnProvider = context.read<VpnProvider>();
+    final logs = context.read<LogsProvider>();
 
     if (serverProvider.selectedServer == null) {
+      logs.warning(
+        LogCategory.ui,
+        'Connect blocked',
+        'Connect was requested without selecting a server first.',
+      );
       _showNoServerDialog();
       return;
     }
 
+    logs.info(
+      LogCategory.ui,
+      'Connect button',
+      'User requested VPN connection from the home screen.',
+    );
     vpnProvider.connect(
       serverProvider.selectedServer!,
       mode: vpnProvider.mode,
@@ -251,6 +264,11 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _handleDisconnect() {
+    context.read<LogsProvider>().info(
+      LogCategory.ui,
+      'Disconnect button',
+      'User requested VPN disconnection from the home screen.',
+    );
     context.read<VpnProvider>().disconnect();
   }
 
