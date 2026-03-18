@@ -229,6 +229,48 @@ func (m *MimicClient) GetStats() NetworkStats {
 	return m.lastStats
 }
 
+// GetDownloadSpeed returns the current download speed in bytes per second.
+func (m *MimicClient) GetDownloadSpeed() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastStats.DownloadSpeed
+}
+
+// GetUploadSpeed returns the current upload speed in bytes per second.
+func (m *MimicClient) GetUploadSpeed() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastStats.UploadSpeed
+}
+
+// GetPing returns the current ping in milliseconds.
+func (m *MimicClient) GetPing() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastStats.Ping
+}
+
+// GetTotalDownload returns the total downloaded bytes.
+func (m *MimicClient) GetTotalDownload() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastStats.TotalDownload
+}
+
+// GetTotalUpload returns the total uploaded bytes.
+func (m *MimicClient) GetTotalUpload() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastStats.TotalUpload
+}
+
+// GetLastUpdated returns the last stats update as a Unix timestamp.
+func (m *MimicClient) GetLastUpdated() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastStats.LastUpdated
+}
+
 // GetServerName returns the current server name
 func (m *MimicClient) GetServerName() string {
 	m.mu.RLock()

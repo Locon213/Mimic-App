@@ -14,7 +14,6 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import mobile.MimicClient
-import mobile.NetworkStats
 import java.io.FileInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -52,7 +51,6 @@ class MimicVpnService : VpnService() {
     // Go Mobile client for VPN processing
     private var mimicClient: MimicClient? = null
     private var statsTimer: java.util.Timer? = null
-    private var currentStats: NetworkStats? = null
 
     // Network tracking
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -384,13 +382,12 @@ class MimicVpnService : VpnService() {
         statsTimer?.scheduleAtFixedRate(object : java.util.TimerTask() {
             override fun run() {
                 try {
-                    mimicClient?.let { client ->
-                        val stats = client.GetStats()
-                        currentStats = stats
+                    mimicClient?.let {
 
                         val statusText = "Connected • ${formatServerName(currentServerName)}"
 
-                        updateNotificationWithStats(statusText, currentServerName, stats.downloadSpeed, stats.uploadSpeed)
+                        // The current Android gomobile binding does not expose stats retrieval.
+                        updateNotificationWithStats(statusText, currentServerName, 0, 0)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error polling stats: ${e.message}")
