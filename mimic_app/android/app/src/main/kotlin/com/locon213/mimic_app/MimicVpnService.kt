@@ -28,6 +28,7 @@ class MimicVpnService : VpnService() {
         private const val NOTIFICATION_CHANNEL_ID = "mimic_vpn_channel"
         private const val NOTIFICATION_ID = 1001
         private const val VPN_MTU = 1500
+        private const val ENABLE_ANDROID_TUN_BRIDGE = false
         private const val VPN_ADDRESS = "10.0.0.1"
         private const val VPN_ADDRESS_V6 = "fd00::1"
         @Volatile
@@ -251,6 +252,11 @@ class MimicVpnService : VpnService() {
                 mimicClient?.connect(serverUrl, mode)
 
                 if (mode.contains("TUN", ignoreCase = true)) {
+                    if (!ENABLE_ANDROID_TUN_BRIDGE) {
+                        throw IllegalStateException(
+                            "Android TUN startup is temporarily disabled because tun2socks attachment is crashing the process."
+                        )
+                    }
                     val tunFd = ParcelFileDescriptor
                         .dup(vpnInterface?.fileDescriptor ?: throw IllegalStateException("VPN interface missing"))
                         .detachFd()

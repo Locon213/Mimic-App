@@ -35,6 +35,7 @@ class AndroidVpnClient {
   Function(NetworkStats)? _statsCallback;
   Timer? _statsTimer;
   StreamSubscription? _eventSubscription;
+  Completer<void>? _pendingConnectCompleter;
   final LogsProvider _logs = LogsProvider.instance;
 
   /// Check if platform is Android
@@ -75,6 +76,7 @@ class AndroidVpnClient {
 
     try {
       _setupEventListener();
+      _pendingConnectCompleter ??= Completer<void>();
       _logs.info(
         LogCategory.mimicProtocol,
         'Native connect',
@@ -86,7 +88,14 @@ class AndroidVpnClient {
         'serverName': _serverName,
         'mode': mode,
       });
+      await _pendingConnectCompleter!.future.timeout(
+        const Duration(seconds: 20),
+      );
     } catch (e) {
+      if (_pendingConnectCompleter != null && !_pendingConnectCompleter!.isCompleted) {
+        _pendingConnectCompleter!.completeError(e);
+      }
+      _pendingConnectCompleter = null;
       _status = 0;
       _logs.error(
         LogCategory.mimicProtocol,
@@ -165,6 +174,10 @@ class AndroidVpnClient {
             _serverUrl = event['serverUrl'] as String?;
             _serverName = event['serverName'] as String?;
             _startStatsPolling();
+            if (_pendingConnectCompleter != null && !_pendingConnectCompleter!.isCompleted) {
+              _pendingConnectCompleter!.complete();
+            }
+            _pendingConnectCompleter = null;
             _logs.info(
               LogCategory.system,
               'Android VPN event',
@@ -176,6 +189,12 @@ class AndroidVpnClient {
             _serverUrl = null;
             _serverName = null;
             _stopStatsPolling();
+            if (_pendingConnectCompleter != null && !_pendingConnectCompleter!.isCompleted) {
+              _pendingConnectCompleter!.completeError(
+                Exception('VPN disconnected before the tunnel was fully established.'),
+              );
+            }
+            _pendingConnectCompleter = null;
             _logs.info(
               LogCategory.system,
               'Android VPN event',
@@ -186,6 +205,12 @@ class AndroidVpnClient {
             _status = 0;
             _stopStatsPolling();
             final error = event['error'] as String?;
+            if (_pendingConnectCompleter != null && !_pendingConnectCompleter!.isCompleted) {
+              _pendingConnectCompleter!.completeError(
+                Exception(error ?? 'Unknown VPN platform error'),
+              );
+            }
+            _pendingConnectCompleter = null;
             _logs.error(
               LogCategory.system,
               'Android VPN error',
