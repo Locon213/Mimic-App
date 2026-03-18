@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../providers/server_provider.dart';
+import '../../models/network_stats.dart';
 import '../../utils/app_theme.dart';
 import '../logs_screen.dart';
 import '../settings_screen.dart';
