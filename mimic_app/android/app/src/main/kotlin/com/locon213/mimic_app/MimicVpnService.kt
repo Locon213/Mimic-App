@@ -366,11 +366,9 @@ class MimicVpnService : VpnService() {
             override fun run() {
                 try {
                     mimicClient?.let { client ->
-                        val stats = client.stats
+                        val stats = client.getStats()
                         currentStats = stats
 
-                        val downloadStr = formatSpeed(stats.downloadSpeed)
-                        val uploadStr = formatSpeed(stats.uploadSpeed)
                         val statusText = "Connected • ${formatServerName(currentServerName)}"
 
                         updateNotificationWithStats(statusText, currentServerName, stats.downloadSpeed, stats.uploadSpeed)

@@ -23,6 +23,8 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -299,23 +301,37 @@ func setSystemProxy(enable bool) {
 
 // setWindowsProxy configures proxy on Windows
 func setWindowsProxy(enable bool) {
+	const internetSettings = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"
+	const proxyServer = "http=127.0.0.1:1081;https=127.0.0.1:1081;socks=127.0.0.1:1080"
+
 	if enable {
-		// Set HTTP proxy
-		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+		// Configure per-protocol proxies so Windows surfaces the expected
+		// HTTP/HTTPS/SOCKS entries in the system proxy UI.
+		runCommand("reg", "add", internetSettings,
 			"/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f")
-		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
-			"/v", "ProxyServer", "/d", "127.0.0.1:1081", "/f")
+		runCommand("reg", "add", internetSettings,
+			"/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyServer, "/f")
+		runCommand("reg", "add", internetSettings,
+			"/v", "ProxyOverride", "/t", "REG_SZ", "/d", "<local>", "/f")
+		runCommand("reg", "delete", internetSettings,
+			"/v", "AutoConfigURL", "/f")
+		runCommand("reg", "add", internetSettings,
+			"/v", "AutoDetect", "/t", "REG_DWORD", "/d", "0", "/f")
 
 		// Wait for registry to update
 		time.Sleep(500 * time.Millisecond)
 
-		// Refresh Internet settings
+		// Refresh Internet settings for WinINet-based applications.
 		runCommand("RUNDLL32.EXE", "wininet.dll,InternetSetOption", "0", "39", "0")
 		runCommand("RUNDLL32.EXE", "wininet.dll,InternetSetOption", "0", "37", "0")
+
+		// Best-effort sync for WinHTTP consumers on Windows.
+		runCommand("netsh", "winhttp", "set", "proxy", proxyServer, "bypass-list=<local>")
 	} else {
 		// Disable proxy
-		runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+		runCommand("reg", "add", internetSettings,
 			"/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f")
+		runCommand("netsh", "winhttp", "reset", "proxy")
 
 		// Wait for registry to update
 		time.Sleep(500 * time.Millisecond)
@@ -328,13 +344,24 @@ func setWindowsProxy(enable bool) {
 
 // setMacOSProxy configures proxy on macOS
 func setMacOSProxy(enable bool) {
-	// Get network service name (typically "Wi-Fi" or "Ethernet")
-	service := "Wi-Fi"
-	if enable {
-		runCommand("networksetup", "-setwebproxy", service, "127.0.0.1", "1081")
-		runCommand("networksetup", "-setsecurewebproxy", service, "127.0.0.1", "1081")
-		runCommand("networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", "1080")
-	} else {
+	services := listMacOSNetworkServices()
+	if len(services) == 0 {
+		log.Println("no macOS network services detected for proxy configuration")
+		return
+	}
+
+	for _, service := range services {
+		if enable {
+			runCommand("networksetup", "-setwebproxy", service, "127.0.0.1", "1081")
+			runCommand("networksetup", "-setsecurewebproxy", service, "127.0.0.1", "1081")
+			runCommand("networksetup", "-setsocksfirewallproxy", service, "127.0.0.1", "1080")
+			runCommand("networksetup", "-setproxybypassdomains", service, "localhost", "127.0.0.1", "::1")
+			runCommand("networksetup", "-setwebproxystate", service, "on")
+			runCommand("networksetup", "-setsecurewebproxystate", service, "on")
+			runCommand("networksetup", "-setsocksfirewallproxystate", service, "on")
+			continue
+		}
+
 		runCommand("networksetup", "-setwebproxystate", service, "off")
 		runCommand("networksetup", "-setsecurewebproxystate", service, "off")
 		runCommand("networksetup", "-setsocksfirewallproxystate", service, "off")
@@ -343,7 +370,27 @@ func setMacOSProxy(enable bool) {
 
 // setLinuxProxy configures proxy on Linux
 func setLinuxProxy(enable bool) {
-	// This sets proxy for GNOME desktop environment
+	if enable {
+		_ = os.Setenv("HTTP_PROXY", "http://127.0.0.1:1081")
+		_ = os.Setenv("HTTPS_PROXY", "http://127.0.0.1:1081")
+		_ = os.Setenv("ALL_PROXY", "socks5://127.0.0.1:1080")
+		_ = os.Setenv("http_proxy", "http://127.0.0.1:1081")
+		_ = os.Setenv("https_proxy", "http://127.0.0.1:1081")
+		_ = os.Setenv("all_proxy", "socks5://127.0.0.1:1080")
+		_ = os.Setenv("NO_PROXY", "localhost,127.0.0.1,::1")
+		_ = os.Setenv("no_proxy", "localhost,127.0.0.1,::1")
+	} else {
+		for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy", "NO_PROXY", "no_proxy"} {
+			_ = os.Unsetenv(key)
+		}
+	}
+
+	if !commandExists("gsettings") {
+		log.Println("gsettings is not available; Linux proxy configuration is limited to environment variables")
+		return
+	}
+
+	// Configure GNOME-compatible desktop environments when available.
 	if enable {
 		runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "manual")
 		runCommand("gsettings", "set", "org.gnome.system.proxy.http", "host", "127.0.0.1")
@@ -352,18 +399,57 @@ func setLinuxProxy(enable bool) {
 		runCommand("gsettings", "set", "org.gnome.system.proxy.https", "port", "1081")
 		runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "host", "127.0.0.1")
 		runCommand("gsettings", "set", "org.gnome.system.proxy.socks", "port", "1080")
+		runCommand("gsettings", "set", "org.gnome.system.proxy", "ignore-hosts", "['localhost', '127.0.0.1', '::1']")
 	} else {
 		runCommand("gsettings", "set", "org.gnome.system.proxy", "mode", "none")
 	}
 }
 
-// runCommand runs a command silently (helper function)
+func listMacOSNetworkServices() []string {
+	if !commandExists("networksetup") {
+		return nil
+	}
+
+	output, err := runCommandOutput("networksetup", "-listallnetworkservices")
+	if err != nil {
+		return nil
+	}
+
+	var services []string
+	for _, line := range strings.Split(output, "\n") {
+		service := strings.TrimSpace(line)
+		if service == "" || strings.HasPrefix(service, "An asterisk") || strings.HasPrefix(service, "*") {
+			continue
+		}
+		services = append(services, service)
+	}
+
+	return services
+}
+
+func commandExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func runCommandOutput(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("command failed: %s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+		return "", err
+	}
+	return string(output), nil
+}
+
+// runCommand runs a helper command and logs failures instead of silently hiding them.
 func runCommand(name string, args ...string) {
-	// Note: This is a simplified version. In production, you'd want proper error handling.
-	// For now, we just execute and ignore errors to prevent crashes.
 	// #nosec G204 - Command execution is intentional
 	cmd := exec.Command(name, args...)
-	_ = cmd.Run() // Ignore errors
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("command failed: %s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
 }
 
 func main() {}
