@@ -47,7 +47,10 @@ class MimicVpnService : VpnService() {
     private val binder = LocalBinder()
     private var vpnInterface: ParcelFileDescriptor? = null
     private var vpnExecutor: ScheduledExecutorService? = null
+    private val connectExecutor = Executors.newSingleThreadExecutor()
     private var isRunning = false
+    @Volatile
+    private var isConnecting = false
     private var currentServerName: String = "Unknown"
     private var currentServerUrl: String = ""
     private var currentMode: String = "TUN"
@@ -84,10 +87,15 @@ class MimicVpnService : VpnService() {
                 currentServerUrl = serverUrl
                 currentServerName = serverName
                 currentMode = mode
-                connect(serverUrl, serverName, mode)
+                startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
+                connectExecutor.execute {
+                    connect(serverUrl, serverName, mode)
+                }
             }
             ACTION_DISCONNECT -> {
-                disconnect()
+                connectExecutor.execute {
+                    disconnect()
+                }
             }
         }
 
@@ -110,6 +118,7 @@ class MimicVpnService : VpnService() {
         Log.d(TAG, "VpnService destroyed")
         NativeLogBridge.info(TAG, "VpnService destroyed")
         disconnect()
+        connectExecutor.shutdownNow()
         currentInstance = null
         super.onDestroy()
     }
@@ -202,18 +211,16 @@ class MimicVpnService : VpnService() {
     }
 
     private fun connect(serverUrl: String, serverName: String, mode: String) {
-        if (isRunning) {
+        if (isRunning || isConnecting) {
             Log.w(TAG, "Already running")
             NativeLogBridge.warning(TAG, "Connect ignored because VPN is already running")
             return
         }
 
+        isConnecting = true
         try {
             Log.d(TAG, "Setting up VPN interface for: $serverUrl, mode: $mode")
             NativeLogBridge.info(TAG, "Setting up VPN interface for $serverName in $mode mode")
-
-            // Start foreground with connecting notification
-            startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
 
             // Initialize Go Mobile client
             mimicClient = MimicClient()
@@ -254,6 +261,7 @@ class MimicVpnService : VpnService() {
             }
 
             isRunning = true
+            isVpnRunning = true
 
             // Setup network callback for better connectivity
             setupNetworkCallback()
@@ -288,11 +296,13 @@ class MimicVpnService : VpnService() {
                     putExtra("error", e.message)
                 }
             )
+        } finally {
+            isConnecting = false
         }
     }
 
     fun disconnect() {
-        if (!isRunning && mimicClient == null) return
+        if (!isRunning && !isConnecting && mimicClient == null) return
 
         Log.d(TAG, "Disconnecting VPN")
         NativeLogBridge.info(TAG, "Disconnecting VPN session")
@@ -310,6 +320,8 @@ class MimicVpnService : VpnService() {
         mimicClient = null
 
         isRunning = false
+        isConnecting = false
+        isVpnRunning = false
 
         // Stop packet forwarding
         vpnExecutor?.shutdown()

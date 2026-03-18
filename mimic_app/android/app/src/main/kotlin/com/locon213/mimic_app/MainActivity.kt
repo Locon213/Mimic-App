@@ -261,7 +261,6 @@ class MainActivity : FlutterActivity() {
             startService(intent)
         }
 
-        MimicVpnService.isVpnRunning = true
         NativeLogBridge.info(TAG, "VPN service start requested for $serverName")
     }
 
@@ -274,7 +273,11 @@ class MainActivity : FlutterActivity() {
                 action = ACTION_DISCONNECT
             }
 
-            startService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
             MimicVpnService.isVpnRunning = false
             result.success(true)
         } catch (e: Exception) {

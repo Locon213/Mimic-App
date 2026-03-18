@@ -7,6 +7,7 @@ import '../models/network_stats.dart';
 import '../models/server_config.dart';
 import 'logs_provider.dart';
 import '../services/android_vpn_client.dart';
+import '../services/desktop_mimic_client.dart';
 
 /// VPN Provider - Manages VPN connection state and statistics
 class VpnProvider extends ChangeNotifier {
@@ -16,6 +17,7 @@ class VpnProvider extends ChangeNotifier {
   String _mode = 'TUN'; // Default to TUN
   String? _error;
   final _vpnClient = AndroidVpnClient.instance;
+  final _desktopClient = DesktopMimicClient.instance;
   final _logs = LogsProvider.instance;
 
   // Getters
@@ -31,6 +33,9 @@ class VpnProvider extends ChangeNotifier {
 
   /// Check if running on Android
   bool get isAndroid => !kIsWeb && Platform.isAndroid;
+
+  bool get isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   /// Check if running on mobile platform
   bool get isMobilePlatform =>
@@ -60,12 +65,21 @@ class VpnProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Connect via Android VpnService on Android
-      await _vpnClient.connect(
-        server.url,
-        _mode,
-        serverName: server.displayName,
-      );
+      if (isAndroid) {
+        await _vpnClient.connect(
+          server.url,
+          _mode,
+          serverName: server.displayName,
+        );
+      } else if (isDesktop) {
+        await _desktopClient.connect(
+          server.url,
+          _mode,
+          serverName: server.displayName,
+        );
+      } else {
+        throw UnsupportedError('VPN connection is not implemented for this platform.');
+      }
 
       _status = ConnectionStatus.connected;
       _logs.info(
@@ -74,8 +88,7 @@ class VpnProvider extends ChangeNotifier {
         'VPN connected to ${server.displayName}.',
       );
 
-      // Set stats callback
-      _vpnClient.setStatsCallback((stats) {
+      _setStatsCallback((stats) {
         _stats = stats;
         notifyListeners();
       });
@@ -99,8 +112,11 @@ class VpnProvider extends ChangeNotifier {
   Future<void> disconnect() async {
     try {
       final serverName = _currentServer?.displayName ?? 'current server';
-      // Disconnect via VpnService
-      await _vpnClient.disconnect();
+      if (isAndroid) {
+        await _vpnClient.disconnect();
+      } else if (isDesktop) {
+        await _desktopClient.disconnect();
+      }
 
       _status = ConnectionStatus.disconnected;
       _stats = models.NetworkStats();
@@ -161,13 +177,23 @@ class VpnProvider extends ChangeNotifier {
   }
 
   /// Get current stats from VPN client
-  models.NetworkStats get currentStats => _vpnClient.getStats();
+  models.NetworkStats get currentStats =>
+      isDesktop ? _desktopClient.getStats() : _vpnClient.getStats();
 
   /// Get server URL from VPN client
-  String? get serverUrl => _vpnClient.getServerUrl();
+  String? get serverUrl => _currentServer?.url;
 
   /// Get server name from VPN client
-  String? get serverName => _vpnClient.getServerName();
+  String? get serverName =>
+      isDesktop ? _desktopClient.getServerName() : _vpnClient.getServerName();
+
+  void _setStatsCallback(void Function(models.NetworkStats) callback) {
+    if (isDesktop) {
+      _desktopClient.setStatsCallback(callback);
+      return;
+    }
+    _vpnClient.setStatsCallback(callback);
+  }
 
   @override
   void dispose() {

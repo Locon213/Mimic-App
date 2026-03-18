@@ -5,14 +5,15 @@ package mobile
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/Locon213/Mimic-App/service"
 	"github.com/Locon213/Mimic-Protocol/pkg/client"
 	"github.com/Locon213/Mimic-Protocol/pkg/config"
-	"github.com/Locon213/Mimic-App/service"
 )
 
 // ConnectionStatus represents the current connection state
@@ -53,18 +54,18 @@ type NetworkStats struct {
 
 // MimicClient is a mobile-friendly wrapper around the Mimic SDK client
 type MimicClient struct {
-	client       *client.Client
-	ctx          context.Context
-	cancel       context.CancelFunc
-	mu           sync.RWMutex
-	status       atomic.Int32
-	serverName   string
-	serverURL    string
-	mode         string // "Proxy" or "TUN"
-	statsTicker  *time.Ticker
-	statsDone    chan struct{}
-	lastStats    NetworkStats
-	callback     func(NetworkStats)
+	client      *client.Client
+	ctx         context.Context
+	cancel      context.CancelFunc
+	mu          sync.RWMutex
+	status      atomic.Int32
+	serverName  string
+	serverURL   string
+	mode        string // "Proxy" or "TUN"
+	statsTicker *time.Ticker
+	statsDone   chan struct{}
+	lastStats   NetworkStats
+	callback    func(NetworkStats)
 }
 
 // NewMimicClient creates a new Mimic client instance
@@ -158,7 +159,7 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	}
 
 	// Start TUN if needed
-	if strings.Contains(mode, "TUN") {
+	if strings.Contains(mode, "TUN") && runtime.GOOS != "android" {
 		service.ConfigureTunRemoteAddress(cfg.Server)
 		if err := service.StartTun2Socks(); err != nil {
 			m.client.Stop()

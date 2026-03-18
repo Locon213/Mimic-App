@@ -64,18 +64,17 @@ class AndroidVpnClient {
 
   /// Connect to VPN
   Future<void> connect(String serverUrl, String mode, {String? serverName}) async {
-    if (!isAndroid) {
-      // On non-Android, just mock the connection
-      await _mockConnect(serverUrl, mode);
-      return;
-    }
-
     _serverUrl = serverUrl;
     _serverName = serverName ?? _extractServerName(serverUrl);
     _mode = mode;
     _status = 1; // connecting
 
+    if (!isAndroid) {
+      throw UnsupportedError('Android VPN client can only be used on Android.');
+    }
+
     try {
+      _setupEventListener();
       _logs.info(
         LogCategory.mimicProtocol,
         'Native connect',
@@ -87,10 +86,6 @@ class AndroidVpnClient {
         'serverName': _serverName,
         'mode': mode,
       });
-
-      _status = 2; // connected
-      _startStatsPolling();
-      _setupEventListener();
     } catch (e) {
       _status = 0;
       _logs.error(
@@ -105,11 +100,7 @@ class AndroidVpnClient {
   /// Disconnect from VPN
   Future<void> disconnect() async {
     if (!isAndroid) {
-      _stopStatsPolling();
-      _eventSubscription?.cancel();
-      _status = 0;
-      _stats = NetworkStats();
-      return;
+      throw UnsupportedError('Android VPN client can only be used on Android.');
     }
 
     try {
@@ -173,6 +164,7 @@ class AndroidVpnClient {
             _status = 2;
             _serverUrl = event['serverUrl'] as String?;
             _serverName = event['serverName'] as String?;
+            _startStatsPolling();
             _logs.info(
               LogCategory.system,
               'Android VPN event',
@@ -192,6 +184,7 @@ class AndroidVpnClient {
             break;
           case 'error':
             _status = 0;
+            _stopStatsPolling();
             final error = event['error'] as String?;
             _logs.error(
               LogCategory.system,
@@ -233,50 +226,12 @@ class AndroidVpnClient {
           e.toString(),
         );
       }
-
-      _updateMockStats();
     });
   }
 
   void _stopStatsPolling() {
     _statsTimer?.cancel();
     _statsTimer = null;
-  }
-
-  /// Mock connection for non-Android platforms
-  Future<void> _mockConnect(String serverUrl, String mode) async {
-    await Future.delayed(const Duration(seconds: 2));
-    _status = 2;
-    _serverUrl = serverUrl;
-    _mode = mode;
-    _logs.warning(
-      LogCategory.system,
-      'Mock VPN session',
-      'Using mock VPN connection on a non-Android platform.',
-    );
-    _startStatsPolling();
-  }
-
-  /// Generate mock stats
-  int _totalDownload = 0;
-  int _totalUpload = 0;
-
-  void _updateMockStats() {
-    final downloadSpeed = 1024 * 100 + (DateTime.now().millisecond * 100);
-    final uploadSpeed = 512 * 100 + (DateTime.now().millisecond * 50);
-
-    _totalDownload += downloadSpeed;
-    _totalUpload += uploadSpeed;
-
-    _stats = NetworkStats(
-      downloadSpeed: downloadSpeed,
-      uploadSpeed: uploadSpeed,
-      ping: 20 + (DateTime.now().millisecond % 30),
-      totalDownload: _totalDownload,
-      totalUpload: _totalUpload,
-    );
-
-    _statsCallback?.call(_stats);
   }
 
   /// Extract server name from URL

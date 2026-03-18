@@ -239,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _handleConnect() {
     final serverProvider = context.read<ServerProvider>();
-    final vpnProvider = context.read<VpnProvider>();
     final logs = context.read<LogsProvider>();
 
     if (serverProvider.selectedServer == null) {
@@ -257,10 +256,7 @@ class _HomeScreenState extends State<HomeScreen>
       'Connect button',
       'User requested VPN connection from the home screen.',
     );
-    vpnProvider.connect(
-      serverProvider.selectedServer!,
-      mode: vpnProvider.mode,
-    );
+    _connectToSelectedServer();
   }
 
   void _handleDisconnect() {
@@ -270,6 +266,26 @@ class _HomeScreenState extends State<HomeScreen>
       'User requested VPN disconnection from the home screen.',
     );
     context.read<VpnProvider>().disconnect();
+  }
+
+  Future<void> _connectToSelectedServer() async {
+    final serverProvider = context.read<ServerProvider>();
+    final vpnProvider = context.read<VpnProvider>();
+
+    try {
+      await vpnProvider.connect(
+        serverProvider.selectedServer!,
+        mode: vpnProvider.mode,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connection failed: $e')),
+      );
+    }
   }
 
   void _showNoServerDialog() {
