@@ -11,6 +11,18 @@ on:
         description: 'Version tag (e.g. v1.0.0)'
         required: false
         default: 'v1.0.0'
+      target:
+        description: 'Platform to build'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+          - windows
+          - linux
+          - macos
 
 env:
   FLUTTER_VERSION: '3.x'
@@ -21,6 +33,7 @@ jobs:
   # Build Flutter Android App
   # ============================================
   build-flutter-android:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'android' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -61,6 +74,12 @@ jobs:
           mkdir -p mimic_app/android/app/libs
           cp mobile/libs/mimic.aar mimic_app/android/app/libs/
 
+      - name: Upload Android AAR
+        uses: actions/upload-artifact@v7
+        with:
+          name: Mimic-Mobile-Android-AAR
+          path: mimic_app/android/app/libs/mimic.aar
+
       - name: Install Flutter dependencies
         working-directory: mimic_app
         run: flutter pub get
@@ -79,6 +98,7 @@ jobs:
   # Build Flutter iOS App
   # ============================================
   build-flutter-ios:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'ios' }}
     runs-on: macos-latest
     steps:
       - name: Checkout Code
@@ -134,6 +154,7 @@ jobs:
   # Build Flutter Windows App
   # ============================================
   build-flutter-windows:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'windows' }}
     runs-on: windows-latest
     steps:
       - name: Checkout Code
@@ -199,6 +220,7 @@ jobs:
   # Build Flutter Linux App
   # ============================================
   build-flutter-linux:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'linux' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -254,6 +276,7 @@ jobs:
   # Build Flutter macOS App
   # ============================================
   build-flutter-macos:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == 'macos' }}
     runs-on: macos-latest
     steps:
       - name: Checkout Code
