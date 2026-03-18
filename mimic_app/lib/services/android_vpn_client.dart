@@ -207,11 +207,33 @@ class AndroidVpnClient {
   /// Poll stats every second
   void _startStatsPolling() {
     _stopStatsPolling();
-    _statsTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _statsTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (_status != 2) {
         timer.cancel();
         return;
       }
+
+      try {
+        final result = await _channel.invokeMapMethod<String, dynamic>('getStats');
+        if (result != null) {
+          _stats = NetworkStats(
+            downloadSpeed: result['downloadSpeed'] as int? ?? 0,
+            uploadSpeed: result['uploadSpeed'] as int? ?? 0,
+            ping: result['ping'] as int? ?? 0,
+            totalDownload: result['totalDownload'] as int? ?? 0,
+            totalUpload: result['totalUpload'] as int? ?? 0,
+          );
+          _statsCallback?.call(_stats);
+          return;
+        }
+      } catch (e) {
+        _logs.warning(
+          LogCategory.mimicProtocol,
+          'Native stats fallback',
+          e.toString(),
+        );
+      }
+
       _updateMockStats();
     });
   }

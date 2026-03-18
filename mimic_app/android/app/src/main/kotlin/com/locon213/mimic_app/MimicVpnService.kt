@@ -32,12 +32,16 @@ class MimicVpnService : VpnService() {
         private const val VPN_MTU = 1500
         private const val VPN_ADDRESS = "10.0.0.1"
         private const val VPN_ADDRESS_V6 = "fd00::1"
+        @Volatile
+        private var currentInstance: MimicVpnService? = null
 
         const val EXTRA_SERVER_NAME = "server_name"
         const val EXTRA_SERVER_URL = "server_url"
 
         var isVpnRunning: Boolean = false
             internal set
+
+        fun getActiveService(): MimicVpnService? = currentInstance
     }
 
     private val binder = LocalBinder()
@@ -62,6 +66,7 @@ class MimicVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        currentInstance = this
         Log.d(TAG, "VpnService created")
         NativeLogBridge.info(TAG, "VpnService created")
         createNotificationChannel()
@@ -105,6 +110,7 @@ class MimicVpnService : VpnService() {
         Log.d(TAG, "VpnService destroyed")
         NativeLogBridge.info(TAG, "VpnService destroyed")
         disconnect()
+        currentInstance = null
         super.onDestroy()
     }
 
@@ -382,12 +388,13 @@ class MimicVpnService : VpnService() {
         statsTimer?.scheduleAtFixedRate(object : java.util.TimerTask() {
             override fun run() {
                 try {
-                    mimicClient?.let {
+                    mimicClient?.let { client ->
 
                         val statusText = "Connected • ${formatServerName(currentServerName)}"
 
-                        // The current Android gomobile binding does not expose stats retrieval.
-                        updateNotificationWithStats(statusText, currentServerName, 0, 0)
+                        val downloadSpeed = client.getDownloadSpeed()
+                        val uploadSpeed = client.getUploadSpeed()
+                        updateNotificationWithStats(statusText, currentServerName, downloadSpeed, uploadSpeed)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error polling stats: ${e.message}")
@@ -421,6 +428,26 @@ class MimicVpnService : VpnService() {
     private fun formatServerName(name: String): String {
         // Extract short name from full server name
         return if (name.length > 30) "${name.take(27)}..." else name
+    }
+
+    fun getCurrentStatsPayload(): Map<String, Long> {
+        val client = mimicClient ?: return mapOf(
+            "downloadSpeed" to 0L,
+            "uploadSpeed" to 0L,
+            "ping" to 0L,
+            "totalDownload" to 0L,
+            "totalUpload" to 0L,
+            "lastUpdated" to 0L
+        )
+
+        return mapOf(
+            "downloadSpeed" to client.getDownloadSpeed(),
+            "uploadSpeed" to client.getUploadSpeed(),
+            "ping" to client.getPing(),
+            "totalDownload" to client.getTotalDownload(),
+            "totalUpload" to client.getTotalUpload(),
+            "lastUpdated" to client.getLastUpdated()
+        )
     }
 }
 

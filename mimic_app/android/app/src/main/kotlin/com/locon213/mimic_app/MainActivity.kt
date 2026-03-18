@@ -92,6 +92,9 @@ class MainActivity : FlutterActivity() {
                 "disconnectVpn" -> {
                     disconnectVpn(result)
                 }
+                "getStats" -> {
+                    getStats(result)
+                }
                 "isVpnRunning" -> {
                     result.success(MimicVpnService.isVpnRunning)
                 }
@@ -278,6 +281,31 @@ class MainActivity : FlutterActivity() {
             Log.e(TAG, "Error disconnecting VPN: ${e.message}", e)
             NativeLogBridge.error(TAG, "Error disconnecting VPN: ${e.message}")
             result.error("VPN_DISCONNECT_ERROR", e.message, null)
+        }
+    }
+
+    private fun getStats(result: MethodChannel.Result) {
+        try {
+            val service = MimicVpnService.getActiveService()
+            if (service == null || !MimicVpnService.isVpnRunning) {
+                result.success(
+                    mapOf(
+                        "downloadSpeed" to 0L,
+                        "uploadSpeed" to 0L,
+                        "ping" to 0L,
+                        "totalDownload" to 0L,
+                        "totalUpload" to 0L,
+                        "lastUpdated" to 0L
+                    )
+                )
+                return
+            }
+
+            result.success(service.getCurrentStatsPayload())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting VPN stats: ${e.message}", e)
+            NativeLogBridge.error(TAG, "Error getting VPN stats: ${e.message}")
+            result.error("VPN_STATS_ERROR", e.message, null)
         }
     }
 }
