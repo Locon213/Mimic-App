@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
@@ -67,41 +68,26 @@ class DesktopMimicClient {
       throw UnsupportedError('Desktop Mimic backend is only available on desktop platforms.');
     }
 
+    final errorMessage = await Isolate.run(
+      () => _desktopConnectOnWorker(serverUrl, mode),
+    );
+    if (errorMessage.isNotEmpty) {
+      throw Exception(errorMessage);
+    }
+
     _ensureLoaded();
-
-    final connectFn = _connect;
-    final freeStringFn = _freeString;
-    if (connectFn == null || freeStringFn == null) {
-      throw StateError('Desktop Mimic backend is not available.');
-    }
-
-    final urlPtr = serverUrl.toNativeUtf8();
-    final modePtr = mode.toNativeUtf8();
-
-    try {
-      final errorPtr = connectFn(urlPtr, modePtr);
-      final errorMessage = errorPtr.toDartString();
-      freeStringFn(errorPtr);
-
-      if (errorMessage.isNotEmpty) {
-        throw Exception(errorMessage);
-      }
-
-      _startStatsPolling();
-      _logs.info(
-        LogCategory.mimicProtocol,
-        'Desktop connect',
-        'Native desktop backend connected to ${serverName ?? _extractServerName(serverUrl)} in $mode mode.',
-      );
-    } finally {
-      calloc.free(urlPtr);
-      calloc.free(modePtr);
-    }
+    _startStatsPolling();
+    _logs.info(
+      LogCategory.mimicProtocol,
+      'Desktop connect',
+      'Native desktop backend connected to ${serverName ?? _extractServerName(serverUrl)} in $mode mode.',
+    );
   }
 
   Future<void> disconnect() async {
-    final disconnectFn = _disconnect;
-    disconnectFn?.call();
+    if (isSupported) {
+      await Isolate.run(_desktopDisconnectOnWorker);
+    }
     _stopStatsPolling();
     _stats = NetworkStats();
   }
@@ -180,36 +166,7 @@ class DesktopMimicClient {
   }
 
   DynamicLibrary? _openLibrary() {
-    final executableDir = File(Platform.resolvedExecutable).parent.path;
-    final candidates = <String>{
-      if (Platform.isWindows) ...{
-        'mimic.dll',
-        '$executableDir\\mimic.dll',
-        '$executableDir\\data\\flutter_assets\\mimic.dll',
-        '$executableDir\\data\\mimic.dll',
-        '$executableDir\\lib\\mimic.dll',
-      },
-      if (Platform.isLinux) ...{
-        'libmimic.so',
-        '$executableDir/libmimic.so',
-        '$executableDir/lib/libmimic.so',
-      },
-      if (Platform.isMacOS) ...{
-        'libmimic.dylib',
-        '$executableDir/libmimic.dylib',
-        '$executableDir/../Frameworks/libmimic.dylib',
-      },
-    };
-
-    for (final candidate in candidates) {
-      try {
-        return DynamicLibrary.open(candidate);
-      } catch (_) {
-        continue;
-      }
-    }
-
-    return null;
+    return _openDesktopLibrary();
   }
 
   void _startStatsPolling() {
@@ -257,4 +214,76 @@ class DesktopMimicClient {
     }
     return 'Unknown Server';
   }
+}
+
+String _desktopConnectOnWorker(String serverUrl, String mode) {
+  final library = _openDesktopLibrary();
+  if (library == null) {
+    return 'Desktop backend library was not found.';
+  }
+
+  final connectFn = library.lookupFunction<_ConnectNative, _ConnectDart>(
+    'MimicClient_Connect',
+  );
+  final freeStringFn = library.lookupFunction<_FreeStringNative, _FreeStringDart>(
+    'MimicClient_FreeString',
+  );
+
+  final urlPtr = serverUrl.toNativeUtf8();
+  final modePtr = mode.toNativeUtf8();
+
+  try {
+    final errorPtr = connectFn(urlPtr, modePtr);
+    final errorMessage = errorPtr.toDartString();
+    freeStringFn(errorPtr);
+    return errorMessage;
+  } finally {
+    calloc.free(urlPtr);
+    calloc.free(modePtr);
+  }
+}
+
+void _desktopDisconnectOnWorker() {
+  final library = _openDesktopLibrary();
+  if (library == null) {
+    return;
+  }
+
+  final disconnectFn = library.lookupFunction<_DisconnectNative, _DisconnectDart>(
+    'MimicClient_Disconnect',
+  );
+  disconnectFn();
+}
+
+DynamicLibrary? _openDesktopLibrary() {
+  final executableDir = File(Platform.resolvedExecutable).parent.path;
+  final candidates = <String>{
+    if (Platform.isWindows) ...{
+      'mimic.dll',
+      '$executableDir\\mimic.dll',
+      '$executableDir\\data\\flutter_assets\\mimic.dll',
+      '$executableDir\\data\\mimic.dll',
+      '$executableDir\\lib\\mimic.dll',
+    },
+    if (Platform.isLinux) ...{
+      'libmimic.so',
+      '$executableDir/libmimic.so',
+      '$executableDir/lib/libmimic.so',
+    },
+    if (Platform.isMacOS) ...{
+      'libmimic.dylib',
+      '$executableDir/libmimic.dylib',
+      '$executableDir/../Frameworks/libmimic.dylib',
+    },
+  };
+
+  for (final candidate in candidates) {
+    try {
+      return DynamicLibrary.open(candidate);
+    } catch (_) {
+      continue;
+    }
+  }
+
+  return null;
 }

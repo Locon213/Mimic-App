@@ -59,6 +59,31 @@ func configuredTunRemoteAddress() string {
 
 // StartTun2Socks starts tun2socks tunneling to the local Mimic SOCKS5 proxy.
 func StartTun2Socks() error {
+	return startTun2Socks(
+		fmt.Sprintf("tun://%s", getTunDeviceName()),
+		1500,
+		true,
+	)
+}
+
+// StartTun2SocksFromFD starts tun2socks against an existing TUN file descriptor.
+// This is used by Android VpnService, which creates the TUN interface itself.
+func StartTun2SocksFromFD(fd int, mtu int) error {
+	if fd <= 0 {
+		return fmt.Errorf("invalid TUN file descriptor: %d", fd)
+	}
+	if mtu <= 0 {
+		mtu = 1500
+	}
+
+	if err := startTun2Socks(fmt.Sprintf("fd://%d", fd), mtu, false); err != nil {
+		_ = os.NewFile(uintptr(fd), "android-vpn-tun").Close()
+		return err
+	}
+	return nil
+}
+
+func startTun2Socks(device string, mtu int, configureRoutes bool) error {
 	if tunRunning.Load() {
 		log.Println("TUN is already running")
 		return nil
@@ -67,7 +92,7 @@ func StartTun2Socks() error {
 	log.Println("TUN mode requested. Starting tun2socks engine...")
 
 	// Platform-specific TUN setup
-	if runtime.GOOS == "windows" {
+	if configureRoutes && runtime.GOOS == "windows" {
 		if err := setupWindowsTun(); err != nil {
 			return fmt.Errorf("failed to setup Windows TUN: %w", err)
 		}
@@ -75,9 +100,9 @@ func StartTun2Socks() error {
 
 	key := &engine.Key{
 		Proxy:    "socks5://127.0.0.1:1080",
-		Device:   fmt.Sprintf("tun://%s", getTunDeviceName()),
+		Device:   device,
 		LogLevel: "info",
-		MTU:      1500,
+		MTU:      mtu,
 	}
 
 	os.Setenv("TUN2SOCKS_LOGLEVEL", "info")
@@ -103,20 +128,22 @@ func StartTun2Socks() error {
 	tunRunning.Store(true)
 
 	// Setup routing after TUN starts
-	var routeErr error
-	switch runtime.GOOS {
-	case "windows":
-		routeErr = setupWindowsRoutes()
-	case "linux":
-		routeErr = setupLinuxTun()
-	case "darwin":
-		routeErr = setupMacOSTun()
-	}
-	if routeErr != nil {
-		tunRunning.Store(false)
-		engine.Stop()
-		log.Printf("Warning: failed to setup TUN routes: %v", routeErr)
-		return routeErr
+	if configureRoutes {
+		var routeErr error
+		switch runtime.GOOS {
+		case "windows":
+			routeErr = setupWindowsRoutes()
+		case "linux":
+			routeErr = setupLinuxTun()
+		case "darwin":
+			routeErr = setupMacOSTun()
+		}
+		if routeErr != nil {
+			tunRunning.Store(false)
+			engine.Stop()
+			log.Printf("Warning: failed to setup TUN routes: %v", routeErr)
+			return routeErr
+		}
 	}
 
 	return nil

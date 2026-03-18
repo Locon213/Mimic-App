@@ -178,6 +178,27 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	return nil
 }
 
+// StartTun attaches tun2socks to an already-created TUN file descriptor.
+// Android VpnService owns the TUN interface and passes the fd here.
+func (m *MimicClient) StartTun(fd, mtu int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.client == nil {
+		return fmt.Errorf("client is not connected")
+	}
+
+	if !strings.Contains(m.mode, "TUN") {
+		return fmt.Errorf("TUN mode is not active")
+	}
+
+	if err := service.StartTun2SocksFromFD(fd, mtu); err != nil {
+		return fmt.Errorf("failed to start TUN from fd: %w", err)
+	}
+
+	return nil
+}
+
 // Disconnect stops the connection
 func (m *MimicClient) Disconnect() {
 	m.mu.Lock()

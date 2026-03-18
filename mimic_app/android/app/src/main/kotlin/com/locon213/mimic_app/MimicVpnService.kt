@@ -14,10 +14,8 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import mobile.MimicClient
-import java.io.FileInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.TimeUnit
 
 /**
  * Mimic VpnService - Real VPN service using Android VpnService
@@ -248,10 +246,18 @@ class MimicVpnService : VpnService() {
             Log.d(TAG, "VPN interface established successfully")
             NativeLogBridge.info(TAG, "VPN interface established successfully")
             
-            // Start Go Mobile client with TUN mode
-            // The Go client will handle tun2socks internally
+            // Start Go Mobile client first so local SOCKS/HTTP proxies are ready.
             try {
                 mimicClient?.connect(serverUrl, mode)
+
+                if (mode.contains("TUN", ignoreCase = true)) {
+                    val tunFd = ParcelFileDescriptor
+                        .dup(vpnInterface?.fileDescriptor ?: throw IllegalStateException("VPN interface missing"))
+                        .detachFd()
+                    mimicClient?.startTun(tunFd, VPN_MTU)
+                    NativeLogBridge.info(TAG, "tun2socks attached to Android VpnService fd")
+                }
+
                 Log.d(TAG, "Go Mobile client started successfully")
                 NativeLogBridge.info(TAG, "Go Mobile client started successfully")
             } catch (goException: Exception) {
