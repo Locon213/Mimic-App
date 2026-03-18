@@ -254,7 +254,7 @@ class MimicVpnService : VpnService() {
                     val tunFd = ParcelFileDescriptor
                         .dup(vpnInterface?.fileDescriptor ?: throw IllegalStateException("VPN interface missing"))
                         .detachFd()
-                    mimicClient?.startTun(tunFd, VPN_MTU)
+                    mimicClient?.startTun(tunFd.toLong(), VPN_MTU.toLong())
                     NativeLogBridge.info(TAG, "tun2socks attached to Android VpnService fd")
                 }
 
