@@ -6,8 +6,10 @@ package main
 #include <stdint.h>
 #include <stdlib.h>
 
-// NetworkStats structure for C
-typedef struct {
+// NetworkStats structure for C.
+// The explicit tag is required for cgo-exported functions on macOS,
+// where generated wrappers refer to `struct NetworkStats`.
+typedef struct NetworkStats {
     int64_t download_speed;
     int64_t upload_speed;
     int64_t ping;
@@ -218,15 +220,15 @@ func MimicClient_GetStats() C.NetworkStats {
 }
 
 //export MimicClient_GetStatsLegacy
-func MimicClient_GetStatsLegacy() C.struct_NetworkStats {
+func MimicClient_GetStatsLegacy() C.NetworkStats {
 	holderMu.Lock()
 	defer holderMu.Unlock()
 
 	if globalHolder == nil {
-		return C.struct_NetworkStats{}
+		return C.NetworkStats{}
 	}
 
-	return C.struct_NetworkStats{
+	return C.NetworkStats{
 		download_speed: C.int64_t(globalHolder.lastStats.DownloadSpeed),
 		upload_speed:   C.int64_t(globalHolder.lastStats.UploadSpeed),
 		ping:           C.int64_t(globalHolder.lastStats.Ping),
