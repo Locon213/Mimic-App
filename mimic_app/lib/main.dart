@@ -11,6 +11,7 @@ import 'providers/server_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/logs_provider.dart';
+import 'services/desktop_go_logs_service.dart';
 import 'services/native_logs_service.dart';
 import 'screens/home_screen.dart';
 import 'utils/app_theme.dart';
@@ -23,6 +24,7 @@ void main() async {
     'Mimic UI initialized and providers are loading.',
   );
   NativeLogsService.instance.start();
+  DesktopGoLogsService.instance.start();
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

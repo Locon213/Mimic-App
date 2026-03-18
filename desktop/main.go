@@ -22,7 +22,9 @@ import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -75,7 +77,82 @@ type clientHolder struct {
 var (
 	globalHolder *clientHolder
 	holderMu     sync.Mutex
+	logBuffer    = newNativeLogBuffer(400)
 )
+
+type nativeLogEntry struct {
+	Level     string `json:"level"`
+	Source    string `json:"source"`
+	Message   string `json:"message"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type nativeLogBuffer struct {
+	mu      sync.Mutex
+	entries []string
+	maxSize int
+}
+
+func newNativeLogBuffer(maxSize int) *nativeLogBuffer {
+	return &nativeLogBuffer{maxSize: maxSize}
+}
+
+func (b *nativeLogBuffer) push(entry nativeLogEntry) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+
+	b.entries = append(b.entries, string(payload))
+	if len(b.entries) > b.maxSize {
+		b.entries = b.entries[len(b.entries)-b.maxSize:]
+	}
+}
+
+func (b *nativeLogBuffer) pop() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if len(b.entries) == 0 {
+		return ""
+	}
+
+	entry := b.entries[0]
+	b.entries = b.entries[1:]
+	return entry
+}
+
+type logCaptureWriter struct{}
+
+func (w *logCaptureWriter) Write(p []byte) (int, error) {
+	text := strings.TrimSpace(string(p))
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		pushNativeLog("info", "GoBackend", line)
+	}
+	return len(p), nil
+}
+
+func pushNativeLog(level, source, message string) {
+	logBuffer.push(nativeLogEntry{
+		Level:     level,
+		Source:    source,
+		Message:   message,
+		Timestamp: time.Now().UnixMilli(),
+	})
+}
+
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	log.SetOutput(io.MultiWriter(&logCaptureWriter{}))
+	pushNativeLog("info", "GoBackend", "Desktop CGO backend initialized.")
+}
 
 //export MimicClient_Connect
 func MimicClient_Connect(serverURL, mode *C.char) *C.char {
@@ -117,12 +194,14 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 
 	if err := mimicClient.Start(ctx); err != nil {
 		cancel()
+		pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start client: %v", err))
 		return C.CString(fmt.Sprintf("failed to start client: %v", err))
 	}
 
 	if err := mimicClient.StartProxies(); err != nil {
 		mimicClient.Stop()
 		cancel()
+		pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start proxies: %v", err))
 		return C.CString(fmt.Sprintf("failed to start proxies: %v", err))
 	}
 
@@ -137,12 +216,14 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 	}
 	globalHolder.status.Store(int32(StatusConnected))
 	holderMu.Unlock()
+	pushNativeLog("info", "GoBackend", fmt.Sprintf("connected to %s in %s mode", globalHolder.serverName, cMode))
 
 	// Start TUN mode if requested (for Desktop)
 	if strings.Contains(cMode, "TUN") {
 		service.ConfigureTunRemoteAddress(cfg.Server)
 		go func() {
 			if err := service.StartTun2Socks(); err != nil {
+				pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start TUN: %v", err))
 				fmt.Printf("Failed to start TUN: %v\n", err)
 			}
 		}()
@@ -158,6 +239,7 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 
 //export MimicClient_Disconnect
 func MimicClient_Disconnect() {
+	pushNativeLog("info", "GoBackend", "disconnect requested")
 	// Reset system proxy
 	setSystemProxy(false)
 
@@ -255,6 +337,11 @@ func MimicClient_GetServerName() *C.char {
 //export MimicClient_FreeString
 func MimicClient_FreeString(s *C.char) {
 	C.free(unsafe.Pointer(s))
+}
+
+//export MimicClient_PollLog
+func MimicClient_PollLog() *C.char {
+	return C.CString(logBuffer.pop())
 }
 
 //export MimicClient_FormatBytes
