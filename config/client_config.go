@@ -25,10 +25,18 @@ type ClientConfig struct {
 	LocalPort     int                     `yaml:"local_port,omitempty"`
 	DNS           string                  `yaml:"dns,omitempty"`
 	Compression   *CompressionConfig      `yaml:"compression,omitempty"`
+	Buffer        *BufferConfig           `yaml:"buffer,omitempty"`
 	CustomPresets map[string]PresetConfig `yaml:"custom_presets,omitempty"`
 	Proxies       []ProxyConfig           `yaml:"proxies,omitempty"`
 	Routing       *RoutingConfig          `yaml:"routing,omitempty"`
 	Settings      *SettingsConfig         `yaml:"settings,omitempty"`
+}
+
+// BufferConfig represents buffer optimization settings
+type BufferConfig struct {
+	RelayBufferSize        int  `yaml:"relay_buffer_size,omitempty"`
+	ReadBufferSize         int  `yaml:"read_buffer_size,omitempty"`
+	EnableOptimizedBuffers bool `yaml:"enable_optimized_buffers,omitempty"`
 }
 
 // DomainConfig represents a domain configuration for mimicry
@@ -288,6 +296,21 @@ func (cm *ConfigManager) applyDefaults(config *ClientConfig) {
 		}
 	}
 
+	if config.Buffer == nil {
+		config.Buffer = &BufferConfig{
+			RelayBufferSize:        128 * 1024, // 128KB
+			ReadBufferSize:         64 * 1024,  // 64KB
+			EnableOptimizedBuffers: true,
+		}
+	} else {
+		if config.Buffer.RelayBufferSize <= 0 {
+			config.Buffer.RelayBufferSize = 128 * 1024
+		}
+		if config.Buffer.ReadBufferSize <= 0 {
+			config.Buffer.ReadBufferSize = 64 * 1024
+		}
+	}
+
 	if len(config.Proxies) == 0 {
 		config.Proxies = []ProxyConfig{
 			{Type: "socks5", Port: 1080},
@@ -498,6 +521,11 @@ func CreateDefaultConfig(path string) error {
 			Enable:  false,
 			Level:   2,
 			MinSize: 64,
+		},
+		Buffer: &BufferConfig{
+			RelayBufferSize:        128 * 1024,
+			ReadBufferSize:         64 * 1024,
+			EnableOptimizedBuffers: true,
 		},
 		CustomPresets: map[string]PresetConfig{
 			"discord.com": {

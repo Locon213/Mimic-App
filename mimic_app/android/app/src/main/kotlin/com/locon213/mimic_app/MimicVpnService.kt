@@ -290,6 +290,7 @@ class MimicVpnService : VpnService() {
         }
 
         isConnecting = true
+        var vpnFdForCleanup: ParcelFileDescriptor? = null
         try {
             Log.d(TAG, "Setting up VPN interface for: $serverUrl, mode: $mode")
             NativeLogBridge.info(TAG, "Setting up VPN interface for $serverName in $mode mode")
@@ -315,11 +316,11 @@ class MimicVpnService : VpnService() {
 
             // Establish VPN interface and get file descriptor
             vpnInterface = builder.establish()
-                ?: throw IllegalStateException("Failed to establish VPN interface")
+                ?: throw IllegalStateException("Failed to establish VPN interface. Check VPN permission.")
 
             Log.d(TAG, "VPN interface established successfully")
             NativeLogBridge.info(TAG, "VPN interface established successfully")
-            
+
             // Start Go Mobile client first so local SOCKS/HTTP proxies are ready.
             try {
                 mimicClient?.connect(serverUrl, mode)
@@ -327,17 +328,35 @@ class MimicVpnService : VpnService() {
                 if (mode.contains("TUN", ignoreCase = true)) {
                     // TUN mode - try to start tun2socks with proper error handling
                     try {
-                        val tunFd = ParcelFileDescriptor
-                            .dup(vpnInterface?.fileDescriptor ?: throw IllegalStateException("VPN interface missing"))
-                            .detachFd()
+                        val currentFd = vpnInterface?.fileDescriptor
+                            ?: throw IllegalStateException("VPN interface file descriptor is null after connect")
+                        
+                        val duplicatedFd = ParcelFileDescriptor.dup(currentFd)
+                            ?: throw IllegalStateException("Failed to duplicate VPN file descriptor")
+                        
+                        vpnFdForCleanup = duplicatedFd
+                        
+                        val tunFd = duplicatedFd.detachFd()
+                        if (tunFd <= 0) {
+                            throw IllegalStateException("Invalid TUN file descriptor: $tunFd")
+                        }
+                        
                         mimicClient?.startTun(tunFd.toLong(), VPN_MTU.toLong())
+                        vpnFdForCleanup = null // fd ownership transferred to tun2socks
                         NativeLogBridge.info(TAG, "tun2socks attached to Android VpnService fd")
                     } catch (tunException: Exception) {
                         Log.e(TAG, "Failed to start TUN mode: ${tunException.message}", tunException)
                         NativeLogBridge.error(TAG, "Failed to start TUN mode: ${tunException.message}")
+                        
+                        // Cleanup duplicated fd if still held
+                        vpnFdForCleanup?.let { fd ->
+                            try { fd.close() } catch (_: Exception) {}
+                        }
+                        vpnFdForCleanup = null
+                        
                         // Fall back to proxy mode
-                        Log.w(TAG, "Falling back to proxy mode")
-                        NativeLogBridge.warning(TAG, "Falling back to proxy mode")
+                        Log.w(TAG, "Falling back to proxy-only mode (TUN unavailable)")
+                        NativeLogBridge.warning(TAG, "Falling back to proxy-only mode")
                     }
                 }
 
@@ -376,13 +395,19 @@ class MimicVpnService : VpnService() {
         } catch (e: Exception) {
             Log.e(TAG, "Connection failed: ${e.message}", e)
             NativeLogBridge.error(TAG, "Connection failed: ${e.message}")
+            
+            // Cleanup duplicated fd on error
+            vpnFdForCleanup?.let { fd ->
+                try { fd.close() } catch (_: Exception) {}
+            }
+            
             updateNotification("Connection failed: ${e.message}")
             disconnect()
 
             sendBroadcast(
                 Intent(ACTION_VPN_ERROR).apply {
                     setPackage(packageName)
-                    putExtra("error", e.message)
+                    putExtra("error", e.message ?: "Unknown connection error")
                 }
             )
         } finally {

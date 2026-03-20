@@ -120,6 +120,14 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	}
 	cfg.DNS = "1.1.1.1:53"
 
+	// Configure buffer optimization
+	if cfg.Buffer.RelayBufferSize <= 0 {
+		cfg.Buffer.RelayBufferSize = 128 * 1024 // 128KB
+	}
+	if cfg.Buffer.ReadBufferSize <= 0 {
+		cfg.Buffer.ReadBufferSize = 64 * 1024 // 64KB
+	}
+
 	// Create client
 	mimicClient, err := client.NewClient(cfg)
 	if err != nil {
