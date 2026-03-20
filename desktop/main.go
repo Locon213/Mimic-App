@@ -170,6 +170,14 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 	}
 	cfg.DNS = "1.1.1.1:53"
 
+	// Configure buffer optimization for high-speed networks
+	if cfg.Buffer.RelayBufferSize <= 0 {
+		cfg.Buffer.RelayBufferSize = 128 * 1024 // 128KB
+	}
+	if cfg.Buffer.ReadBufferSize <= 0 {
+		cfg.Buffer.ReadBufferSize = 64 * 1024 // 64KB
+	}
+
 	mimicClient, err := client.NewClient(cfg)
 	if err != nil {
 		return C.CString(fmt.Sprintf("failed to create client: %v", err))

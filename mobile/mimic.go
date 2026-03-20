@@ -55,20 +55,21 @@ type NetworkStats struct {
 
 // MimicClient is a mobile-friendly wrapper around the Mimic SDK client
 type MimicClient struct {
-	client      *client.Client
-	ctx         context.Context
-	cancel      context.CancelFunc
-	mu          sync.RWMutex
-	status      atomic.Int32
-	serverName  string
-	serverURL   string
-	mode        string // "Proxy" or "TUN"
-	statsTicker *time.Ticker
-	statsDone   chan struct{}
-	lastStats   NetworkStats
-	callback    func(NetworkStats)
-	configMgr   *config.ConfigManager
-	configPath  string
+	client         *client.Client
+	ctx            context.Context
+	cancel         context.CancelFunc
+	mu             sync.RWMutex
+	status         atomic.Int32
+	serverName     string
+	serverURL      string
+	mode           string // "Proxy" or "TUN"
+	statsTicker    *time.Ticker
+	statsDone      chan struct{}
+	lastStats      NetworkStats
+	callback       func(NetworkStats)
+	configMgr      *config.ConfigManager
+	configPath     string
+	proxyOptimizer *service.ProxyOptimizer
 }
 
 // NewMimicClient creates a new Mimic client instance
@@ -138,8 +139,23 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	m.client = mimicClient
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 
-	// Set traffic callback
+	// Initialize proxy optimizer for stat aggregation
+	m.proxyOptimizer = service.NewProxyOptimizer(m.ctx)
+
+	// Set traffic callback with real proxy stats aggregation
 	m.client.SetTrafficCallback(func(stats client.NetworkStats) {
+		// Aggregate real proxy stats from SDK
+		if m.proxyOptimizer != nil {
+			proxyStats := m.proxyOptimizer.GetProxyStats(mimicClient)
+			if proxyStats.DownloadSpeed > 0 || proxyStats.UploadSpeed > 0 ||
+				proxyStats.BytesDown > 0 || proxyStats.BytesUp > 0 {
+				stats.TotalDownload = proxyStats.BytesDown
+				stats.TotalUpload = proxyStats.BytesUp
+				stats.DownloadSpeed = proxyStats.DownloadSpeed
+				stats.UploadSpeed = proxyStats.UploadSpeed
+			}
+		}
+
 		m.mu.Lock()
 		m.lastStats = NetworkStats{
 			DownloadSpeed: stats.DownloadSpeed,
@@ -217,6 +233,12 @@ func (m *MimicClient) Disconnect() {
 
 	if m.cancel != nil {
 		m.cancel()
+	}
+
+	// Stop proxy optimizer
+	if m.proxyOptimizer != nil {
+		m.proxyOptimizer.Stop()
+		m.proxyOptimizer = nil
 	}
 
 	// Stop stats ticker
