@@ -77,6 +77,19 @@ class AppColors {
   static const Color outlineDark = Color(0xFF938F99);
   static const Color outlineVariantDark = Color(0xFF49454F);
 
+  // Backward compatibility aliases
+  static const Color backgroundDark = surfaceDark;
+  static const Color backgroundLight = surface;
+  static const Color surfaceLight = surface;
+  static const Color surfaceElevated = surfaceContainer;
+  static const Color surfaceElevatedLight = surfaceContainer;
+  static const Color textDarkPrimary = onSurfaceDark;
+  static const Color textPrimary = onSurface;
+  static const Color textDarkSecondary = onSurfaceVariantDark;
+  static const Color textSecondary = onSurfaceVariant;
+  static const Color accent = primary;
+  static const Color warning = connecting;
+
   // Card gradients
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF6750A4), Color(0xFF7F67BE)],
