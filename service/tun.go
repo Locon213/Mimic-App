@@ -16,6 +16,18 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
+// WindowsTunBackend represents the TUN backend type for Windows
+type WindowsTunBackend string
+
+const (
+	// WinTunBackend uses WireGuard's WinTun driver
+	WinTunBackend WindowsTunBackend = "wintun"
+	// WireGuardNTBackend uses WireGuard NT driver
+	WireGuardNTBackend WindowsTunBackend = "wireguard-nt"
+	// AutoBackend automatically selects the best available backend
+	AutoBackend WindowsTunBackend = "auto"
+)
+
 var tunRunning atomic.Bool
 
 var (
@@ -163,23 +175,91 @@ func getTunDeviceName() string {
 	}
 }
 
-// setupWindowsTun sets up Windows TUN adapter
+// setupWindowsTun sets up Windows TUN adapter with enhanced error handling
 func setupWindowsTun() error {
 	log.Println("Setting up Windows TUN adapter...")
 
 	// Check if running as administrator
 	if !isRunningAsAdmin() {
-		return errors.New("TUN mode on Windows requires Administrator rights")
+		return errors.New("TUN mode on Windows requires Administrator rights. Please run as Administrator or use Proxy mode instead")
 	}
 
-	// Install Wintun driver if needed
+	// Detect and configure TUN backend
+	backend := detectWindowsTunBackend()
+	log.Printf("Using Windows TUN backend: %s", backend)
+
+	switch backend {
+	case WinTunBackend:
+		if err := setupWinTun(); err != nil {
+			return fmt.Errorf("WinTun setup failed: %w", err)
+		}
+	case WireGuardNTBackend:
+		if err := setupWireGuardNT(); err != nil {
+			return fmt.Errorf("WireGuard NT setup failed: %w", err)
+		}
+	default:
+		// Try WinTun first, fallback to WireGuard NT
+		if err := setupWinTun(); err != nil {
+			log.Printf("WinTun not available: %v, trying WireGuard NT...", err)
+			if err := setupWireGuardNT(); err != nil {
+				return fmt.Errorf("no TUN backend available: %w", err)
+			}
+		}
+	}
+
+	log.Println("Windows TUN adapter setup completed successfully")
+	return nil
+}
+
+// detectWindowsTunBackend detects the best available TUN backend
+func detectWindowsTunBackend() WindowsTunBackend {
+	// Check for WinTun DLL
+	if findWintunDll() != "" {
+		return WinTunBackend
+	}
+
+	// Check for WireGuard NT
+	if isWireGuardNTAvailable() {
+		return WireGuardNTBackend
+	}
+
+	return AutoBackend
+}
+
+// setupWinTun configures WinTun driver
+func setupWinTun() error {
 	wintunDll := findWintunDll()
-	if wintunDll != "" {
-		log.Printf("Found Wintun DLL: %s", wintunDll)
-		os.Setenv("WINTUN_DLL", wintunDll)
+	if wintunDll == "" {
+		return errors.New("wintun.dll not found in common locations")
+	}
+
+	log.Printf("Found WinTun DLL: %s", wintunDll)
+	os.Setenv("WINTUN_DLL", wintunDll)
+
+	// Verify DLL is accessible
+	if _, err := os.Stat(wintunDll); err != nil {
+		return fmt.Errorf("WinTun DLL not accessible: %w", err)
 	}
 
 	return nil
+}
+
+// setupWireGuardNT configures WireGuard NT driver
+func setupWireGuardNT() error {
+	// Check if WireGuard NT service is available
+	cmd := exec.Command("sc", "query", "WireGuardTunnel")
+	if err := cmd.Run(); err != nil {
+		return errors.New("WireGuard NT service not found")
+	}
+
+	log.Println("WireGuard NT service detected")
+	return nil
+}
+
+// isWireGuardNTAvailable checks if WireGuard NT is available
+func isWireGuardNTAvailable() bool {
+	cmd := exec.Command("sc", "query", "WireGuardTunnel")
+	return cmd.Run() == nil
 }
 
 // setupWindowsRoutes sets up routing table for Windows TUN
@@ -360,16 +440,52 @@ func cleanupWindowsRoutes() {
 
 	iface, err := getTunInterface()
 	if err != nil {
+		log.Printf("Warning: could not find TUN interface for cleanup: %v", err)
+		// Try to cleanup by interface name pattern
+		cleanupWindowsRoutesByName()
 		return
 	}
 
-	_ = runWindowsCommand("route", "delete", windowsTunRouteDest, "mask", windowsTunRouteDest,
-		windowsTunIPv4GW, "if", fmt.Sprintf("%d", iface.Index))
+	// Remove IPv4 default route
+	if err := runWindowsCommand("route", "delete", windowsTunRouteDest, "mask", windowsTunRouteDest,
+		windowsTunIPv4GW, "if", fmt.Sprintf("%d", iface.Index)); err != nil {
+		log.Printf("Warning: failed to remove IPv4 route: %v", err)
+	}
 
-	_ = runWindowsCommand("netsh", "interface", "ipv6", "delete", "route", "::/0",
-		fmt.Sprintf("interface=%s", iface.Name), windowsTunIPv6GW)
+	// Remove IPv6 default route
+	if err := runWindowsCommand("netsh", "interface", "ipv6", "delete", "route", "::/0",
+		fmt.Sprintf("interface=%s", iface.Name), windowsTunIPv6GW); err != nil {
+		log.Printf("Warning: failed to remove IPv6 route: %v", err)
+	}
+
+	// Cleanup WireGuard NT if used
+	cleanupWireGuardNT()
 
 	log.Println("Windows TUN routes cleaned up")
+}
+
+// cleanupWindowsRoutesByName attempts to cleanup routes by interface name pattern
+func cleanupWindowsRoutesByName() {
+	// Try common TUN interface names
+	names := []string{windowsTunName, "MimicTUN", "WireGuard"}
+	for _, name := range names {
+		if err := runWindowsCommand("netsh", "interface", "ipv4", "delete", "route", windowsTunRouteDest,
+			fmt.Sprintf("interface=%s", name), windowsTunIPv4GW); err == nil {
+			log.Printf("Cleaned up routes for interface: %s", name)
+		}
+	}
+}
+
+// cleanupWireGuardNT cleans up WireGuard NT tunnel
+func cleanupWireGuardNT() {
+	// Stop WireGuard tunnel service if it was started
+	cmd := exec.Command("sc", "stop", "WireGuardTunnel")
+	if err := cmd.Run(); err != nil {
+		// Service might not be running, which is fine
+		log.Printf("WireGuard NT service stop: %v", err)
+	} else {
+		log.Println("WireGuard NT service stopped")
+	}
 }
 
 func setupLinuxTun() error {

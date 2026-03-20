@@ -3,7 +3,9 @@ module github.com/Locon213/Mimic-App
 go 1.25.5
 
 require (
-	github.com/Locon213/Mimic-Protocol v0.3.4
+	github.com/Locon213/Mimic-Protocol v0.3.5
+	github.com/goccy/go-yaml v1.19.2
+	github.com/klauspost/compress v1.18.5
 	github.com/xjasonlyu/tun2socks/v2 v2.6.0
 )
 
@@ -14,7 +16,6 @@ require (
 	github.com/go-chi/cors v1.2.1 // indirect
 	github.com/go-chi/render v1.0.3 // indirect
 	github.com/go-gost/relay v0.5.0 // indirect
-	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect

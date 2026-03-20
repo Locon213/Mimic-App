@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Locon213/Mimic-App/compression"
 	"github.com/Locon213/Mimic-Protocol/pkg/client"
 	"github.com/Locon213/Mimic-Protocol/pkg/config"
 )
@@ -29,10 +30,31 @@ type VpnService struct {
 	statsTicker     *time.Ticker
 	statsTickerDone chan struct{}
 	isRunning       atomic.Bool
+	compressor      *compression.Compressor
 }
 
 func NewVpnService() *VpnService {
 	return &VpnService{}
+}
+
+// NewVpnServiceWithCompression creates a new VPN service with compression support
+func NewVpnServiceWithCompression(compressionEnabled bool, compressionLevel int) (*VpnService, error) {
+	if !compressionEnabled {
+		return &VpnService{}, nil
+	}
+
+	cfg := compression.CompressorConfig{
+		Level:   compressionLevel,
+		MinSize: 64,
+	}
+	compressor, err := compression.NewCompressor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create compressor: %w", err)
+	}
+
+	return &VpnService{
+		compressor: compressor,
+	}, nil
 }
 
 func (v *VpnService) StartService(serverUrl string, mode string) error {
@@ -130,7 +152,12 @@ func (v *VpnService) StartService(serverUrl string, mode string) error {
 	v.statsTicker = time.NewTicker(1 * time.Second)
 	go v.statsLoop()
 
-	log.Printf("✅ Service started successfully, connected to %s", v.serverAddress)
+	// Log compression status
+	if v.compressor != nil {
+		log.Printf("✅ Service started successfully, connected to %s (compression enabled)", v.serverAddress)
+	} else {
+		log.Printf("✅ Service started successfully, connected to %s", v.serverAddress)
+	}
 	return nil
 }
 
@@ -142,6 +169,20 @@ func (v *VpnService) StopService() {
 	defer v.mu.Unlock()
 
 	v.cleanup()
+}
+
+// GetCompressor returns the compressor instance
+func (v *VpnService) GetCompressor() *compression.Compressor {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.compressor
+}
+
+// SetCompressor sets the compressor instance
+func (v *VpnService) SetCompressor(compressor *compression.Compressor) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.compressor = compressor
 }
 
 // cleanup performs internal cleanup of resources
@@ -166,6 +207,12 @@ func (v *VpnService) cleanup() {
 	if v.client != nil {
 		v.client.Stop()
 		v.client = nil
+	}
+
+	// Close compressor
+	if v.compressor != nil {
+		v.compressor.Close()
+		v.compressor = nil
 	}
 
 	v.isRunning.Store(false)

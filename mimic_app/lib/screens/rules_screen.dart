@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
 import '../providers/settings_provider.dart';
 import '../models/routing_rule.dart';
 import '../utils/app_theme.dart';
+import 'app_selection_screen.dart';
 
 /// Rules Screen - Manage routing rules for a specific type
 class RulesScreen extends StatefulWidget {
@@ -39,6 +41,13 @@ class _RulesScreenState extends State<RulesScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // App selection button (Android only)
+          if (Platform.isAndroid && widget.ruleType == RuleType.direct)
+            IconButton(
+              icon: const Icon(Icons.apps_rounded),
+              onPressed: () => _openAppSelection(context),
+              tooltip: 'Select App',
+            ),
           IconButton(
             icon: const Icon(Icons.add_rounded),
             onPressed: () => _showAddRuleDialog(context),
@@ -140,6 +149,15 @@ class _RulesScreenState extends State<RulesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openAppSelection(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AppSelectionScreen(ruleType: widget.ruleType),
       ),
     );
   }

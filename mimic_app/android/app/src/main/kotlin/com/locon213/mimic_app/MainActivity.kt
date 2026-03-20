@@ -76,6 +76,9 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         NativeLogBridge.info(TAG, "Flutter engine configured")
 
+        // Register AppListPlugin
+        flutterEngine.plugins.add(AppListPlugin())
+
         // Setup Method Channel for VPN commands
         vpnMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VPN_CHANNEL)
         vpnMethodChannel?.setMethodCallHandler { call, result ->

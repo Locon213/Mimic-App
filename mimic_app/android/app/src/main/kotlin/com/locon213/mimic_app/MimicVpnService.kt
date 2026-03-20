@@ -1,7 +1,9 @@
 package com.locon213.mimic_app
 
+import android.Manifest
 import android.app.*
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -13,6 +15,7 @@ import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import mobile.MimicClient
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -28,7 +31,6 @@ class MimicVpnService : VpnService() {
         private const val NOTIFICATION_CHANNEL_ID = "mimic_vpn_channel"
         private const val NOTIFICATION_ID = 1001
         private const val VPN_MTU = 1500
-        private const val ENABLE_ANDROID_TUN_BRIDGE = false
         private const val VPN_ADDRESS = "10.0.0.1"
         private const val VPN_ADDRESS_V6 = "fd00::1"
         @Volatile
@@ -41,6 +43,27 @@ class MimicVpnService : VpnService() {
             internal set
 
         fun getActiveService(): MimicVpnService? = currentInstance
+        
+        /**
+         * Check if VPN permission is granted
+         */
+        fun hasVpnPermission(context: android.content.Context): Boolean {
+            return VpnService.prepare(context) == null
+        }
+        
+        /**
+         * Check if notification permission is granted (Android 13+)
+         */
+        fun hasNotificationPermission(context: android.content.Context): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        }
     }
 
     private val binder = LocalBinder()
@@ -71,12 +94,29 @@ class MimicVpnService : VpnService() {
         currentInstance = this
         Log.d(TAG, "VpnService created")
         NativeLogBridge.info(TAG, "VpnService created")
+        
+        // Check VPN permission
+        if (!hasVpnPermission(this)) {
+            Log.e(TAG, "VPN permission not granted")
+            NativeLogBridge.error(TAG, "VPN permission not granted")
+            stopSelf()
+            return
+        }
+        
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "VpnService started with action: ${intent?.action}")
         NativeLogBridge.info(TAG, "VpnService started with action: ${intent?.action}")
+
+        // Check VPN permission before processing
+        if (!hasVpnPermission(this)) {
+            Log.e(TAG, "VPN permission not granted, cannot start service")
+            NativeLogBridge.error(TAG, "VPN permission not granted, cannot start service")
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         when (intent?.action) {
             ACTION_CONNECT -> {
@@ -86,7 +126,22 @@ class MimicVpnService : VpnService() {
                 currentServerUrl = serverUrl
                 currentServerName = serverName
                 currentMode = mode
-                startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
+                
+                // Check notification permission for Android 13+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (!hasNotificationPermission(this)) {
+                        Log.w(TAG, "Notification permission not granted, starting without notification")
+                        NativeLogBridge.warning(TAG, "Notification permission not granted")
+                    }
+                }
+                
+                try {
+                    startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start foreground: ${e.message}", e)
+                    NativeLogBridge.error(TAG, "Failed to start foreground: ${e.message}")
+                }
+                
                 connectExecutor.execute {
                     connect(serverUrl, serverName, mode)
                 }
@@ -135,8 +190,13 @@ class MimicVpnService : VpnService() {
                 enableLights(false)
             }
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+            try {
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                notificationManager.createNotificationChannel(channel)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create notification channel: ${e.message}", e)
+                NativeLogBridge.error(TAG, "Failed to create notification channel: ${e.message}")
+            }
         }
     }
 
@@ -216,6 +276,19 @@ class MimicVpnService : VpnService() {
             return
         }
 
+        // Double-check VPN permission
+        if (!hasVpnPermission(this)) {
+            Log.e(TAG, "VPN permission not granted")
+            NativeLogBridge.error(TAG, "VPN permission not granted")
+            sendBroadcast(
+                Intent(ACTION_VPN_ERROR).apply {
+                    setPackage(packageName)
+                    putExtra("error", "VPN permission not granted")
+                }
+            )
+            return
+        }
+
         isConnecting = true
         try {
             Log.d(TAG, "Setting up VPN interface for: $serverUrl, mode: $mode")
@@ -252,16 +325,20 @@ class MimicVpnService : VpnService() {
                 mimicClient?.connect(serverUrl, mode)
 
                 if (mode.contains("TUN", ignoreCase = true)) {
-                    if (!ENABLE_ANDROID_TUN_BRIDGE) {
-                        throw IllegalStateException(
-                            "Android TUN startup is temporarily disabled because tun2socks attachment is crashing the process."
-                        )
+                    // TUN mode - try to start tun2socks with proper error handling
+                    try {
+                        val tunFd = ParcelFileDescriptor
+                            .dup(vpnInterface?.fileDescriptor ?: throw IllegalStateException("VPN interface missing"))
+                            .detachFd()
+                        mimicClient?.startTun(tunFd.toLong(), VPN_MTU.toLong())
+                        NativeLogBridge.info(TAG, "tun2socks attached to Android VpnService fd")
+                    } catch (tunException: Exception) {
+                        Log.e(TAG, "Failed to start TUN mode: ${tunException.message}", tunException)
+                        NativeLogBridge.error(TAG, "Failed to start TUN mode: ${tunException.message}")
+                        // Fall back to proxy mode
+                        Log.w(TAG, "Falling back to proxy mode")
+                        NativeLogBridge.warning(TAG, "Falling back to proxy mode")
                     }
-                    val tunFd = ParcelFileDescriptor
-                        .dup(vpnInterface?.fileDescriptor ?: throw IllegalStateException("VPN interface missing"))
-                        .detachFd()
-                    mimicClient?.startTun(tunFd.toLong(), VPN_MTU.toLong())
-                    NativeLogBridge.info(TAG, "tun2socks attached to Android VpnService fd")
                 }
 
                 Log.d(TAG, "Go Mobile client started successfully")
@@ -350,12 +427,28 @@ class MimicVpnService : VpnService() {
 
         // Unregister network callback
         networkCallback?.let {
-            connectivityManager?.unregisterNetworkCallback(it)
+            try {
+                connectivityManager?.unregisterNetworkCallback(it)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering network callback: ${e.message}")
+                NativeLogBridge.error(TAG, "Error unregistering network callback: ${e.message}")
+            }
         }
         networkCallback = null
 
         // Stop foreground service
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping foreground: ${e.message}")
+            NativeLogBridge.error(TAG, "Error stopping foreground: ${e.message}")
+        }
+        
         stopSelf()
 
         // Notify Flutter
@@ -370,40 +463,52 @@ class MimicVpnService : VpnService() {
     }
 
     private fun setupNetworkCallback() {
-        connectivityManager = getSystemService(ConnectivityManager::class.java)
+        try {
+            connectivityManager = getSystemService(ConnectivityManager::class.java)
 
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
 
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                Log.d(TAG, "Network available")
-                NativeLogBridge.debug(TAG, "Network available")
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.d(TAG, "Network available")
+                    NativeLogBridge.debug(TAG, "Network available")
+                }
+
+                override fun onLost(network: Network) {
+                    Log.d(TAG, "Network lost")
+                    NativeLogBridge.warning(TAG, "Network lost")
+                }
+
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    capabilities: NetworkCapabilities
+                ) {
+                    val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    Log.d(TAG, "Network capabilities changed, has internet: $hasInternet")
+                    NativeLogBridge.debug(TAG, "Network capabilities changed, has internet: $hasInternet")
+                }
             }
 
-            override fun onLost(network: Network) {
-                Log.d(TAG, "Network lost")
-                NativeLogBridge.warning(TAG, "Network lost")
+            networkCallback?.let { callback ->
+                connectivityManager?.registerNetworkCallback(request, callback)
             }
-
-            override fun onCapabilitiesChanged(
-                network: Network,
-                capabilities: NetworkCapabilities
-            ) {
-                val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                Log.d(TAG, "Network capabilities changed, has internet: $hasInternet")
-                NativeLogBridge.debug(TAG, "Network capabilities changed, has internet: $hasInternet")
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to setup network callback: ${e.message}", e)
+            NativeLogBridge.error(TAG, "Failed to setup network callback: ${e.message}")
         }
-
-        connectivityManager?.registerNetworkCallback(request, networkCallback!!)
     }
 
     private fun updateNotification(status: String, serverName: String = currentServerName) {
-        val notification = createNotification(status, serverName)
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        try {
+            val notification = createNotification(status, serverName)
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating notification: ${e.message}")
+            NativeLogBridge.error(TAG, "Error updating notification: ${e.message}")
+        }
     }
 
     private fun startStatsPolling() {

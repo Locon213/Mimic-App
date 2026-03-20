@@ -11,9 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Locon213/Mimic-App/config"
 	"github.com/Locon213/Mimic-App/service"
 	"github.com/Locon213/Mimic-Protocol/pkg/client"
-	"github.com/Locon213/Mimic-Protocol/pkg/config"
+	mimicconfig "github.com/Locon213/Mimic-Protocol/pkg/config"
 )
 
 // ConnectionStatus represents the current connection state
@@ -66,6 +67,8 @@ type MimicClient struct {
 	statsDone   chan struct{}
 	lastStats   NetworkStats
 	callback    func(NetworkStats)
+	configMgr   *config.ConfigManager
+	configPath  string
 }
 
 // NewMimicClient creates a new Mimic client instance
@@ -101,7 +104,7 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	m.mode = mode
 
 	// Parse server URL
-	cfg, err := config.ParseMimicURL(serverURL)
+	cfg, err := mimicconfig.ParseMimicURL(serverURL)
 	if err != nil {
 		m.status.Store(int32(StatusDisconnected))
 		return fmt.Errorf("failed to parse URL: %w", err)
@@ -111,7 +114,7 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	m.serverName = extractServerName(serverURL)
 
 	// Configure proxies
-	cfg.Proxies = []config.ProxyConfig{
+	cfg.Proxies = []mimicconfig.ProxyConfig{
 		{Type: "socks5", Port: 1080},
 		{Type: "http", Port: 1081},
 	}
