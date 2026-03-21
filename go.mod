@@ -3,7 +3,7 @@ module github.com/Locon213/Mimic-App
 go 1.25.5
 
 require (
-	github.com/Locon213/Mimic-Protocol v0.3.7
+	github.com/Locon213/Mimic-Protocol v0.3.8
 	github.com/goccy/go-json v0.10.6
 	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.18.5

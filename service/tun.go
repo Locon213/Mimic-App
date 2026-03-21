@@ -69,11 +69,10 @@ func configuredTunRemoteAddress() string {
 	return tunRemoteAddr
 }
 
-// StartTun2Socks starts tun2socks tunneling to the local Mimic SOCKS5 proxy.
 func StartTun2Socks() error {
 	return startTun2Socks(
 		fmt.Sprintf("tun://%s", getTunDeviceName()),
-		1500,
+		9000,
 		true,
 	)
 }
@@ -85,7 +84,7 @@ func StartTun2SocksFromFD(fd int, mtu int) error {
 		return fmt.Errorf("invalid TUN file descriptor: %d", fd)
 	}
 	if mtu <= 0 {
-		mtu = 1500
+		mtu = 9000
 	}
 
 	if err := startTun2Socks(fmt.Sprintf("fd://%d", fd), mtu, false); err != nil {

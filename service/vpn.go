@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,7 +24,7 @@ type VpnService struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	mode            string
-	lastStats       client.NetworkStats
+	lastStats       atomic.Value // holds client.NetworkStats
 	statsCallback   func(client.NetworkStats)
 	serverName      string
 	serverAddress   string
@@ -31,7 +32,6 @@ type VpnService struct {
 	statsTickerDone chan struct{}
 	isRunning       atomic.Bool
 	compressor      *compression.Compressor
-	proxyOptimizer  *ProxyOptimizer
 }
 
 func NewVpnService() *VpnService {
@@ -87,13 +87,24 @@ func (v *VpnService) StartService(serverUrl string, mode string) error {
 	}
 	cfg.DNS = "1.1.1.1:53"
 
+	// Match App compressor config with the SDK ClientConfig
+	if v.compressor != nil {
+		cfg.Compression.Enable = true
+		cfg.Compression.Level = 2 // standard good compression
+		cfg.Compression.MinSize = 64
+	}
+
 	// Configure buffer optimization for high-speed networks
-	if cfg.Buffer.RelayBufferSize <= 0 {
-		cfg.Buffer.RelayBufferSize = 128 * 1024 // 128KB
+	if cfg.Buffer.RelayBufferSize <= 0 || cfg.Buffer.RelayBufferSize == 128*1024 {
+		cfg.Buffer.RelayBufferSize = 4 * 1024 * 1024 // 4MB
 	}
-	if cfg.Buffer.ReadBufferSize <= 0 {
-		cfg.Buffer.ReadBufferSize = 64 * 1024 // 64KB
+	if cfg.Buffer.ReadBufferSize <= 0 || cfg.Buffer.ReadBufferSize == 64*1024 {
+		cfg.Buffer.ReadBufferSize = 1 * 1024 * 1024 // 1MB
 	}
+	cfg.Buffer.EnableOptimizedBuffers = true
+
+	// Tune Go Garbage Collector for high-speed streaming throughput
+	debug.SetGCPercent(150)
 
 	mimicClient, err := client.NewClient(cfg)
 	if err != nil {
@@ -106,30 +117,14 @@ func (v *VpnService) StartService(serverUrl string, mode string) error {
 	v.client = mimicClient
 	v.isRunning.Store(true)
 
-	// Initialize proxy optimizer for better performance
-	v.proxyOptimizer = NewProxyOptimizer(v.ctx)
+	// Initialize lastStats empty
+	v.lastStats.Store(client.NetworkStats{})
 
 	// Set traffic callback for real-time stats
-	// Use a wrapper to prevent race conditions
+	// Use lock-free atomic value to prevent massive CPU blocking
 	mimicClient.SetTrafficCallback(func(stats client.NetworkStats) {
-		// Aggregate real proxy stats
-		if v.proxyOptimizer != nil {
-			proxyStats := v.proxyOptimizer.GetProxyStats(mimicClient)
-
-			// Use real proxy data instead of empty SDK stats
-			if proxyStats.DownloadSpeed > 0 || proxyStats.UploadSpeed > 0 ||
-				proxyStats.BytesDown > 0 || proxyStats.BytesUp > 0 {
-				stats.TotalDownload = proxyStats.BytesDown
-				stats.TotalUpload = proxyStats.BytesUp
-				stats.DownloadSpeed = proxyStats.DownloadSpeed
-				stats.UploadSpeed = proxyStats.UploadSpeed
-			}
-		}
-
-		// Safely update stats
-		v.mu.Lock()
-		v.lastStats = stats
-		v.mu.Unlock()
+		// Safely update stats purely lock-free
+		v.lastStats.Store(stats)
 
 		// Call external callback if set
 		v.mu.RLock()
@@ -224,10 +219,7 @@ func (v *VpnService) cleanup() {
 	}
 
 	// Stop proxy optimizer
-	if v.proxyOptimizer != nil {
-		v.proxyOptimizer.Stop()
-		v.proxyOptimizer = nil
-	}
+	// removed because ProxyOptimizer is deleted
 
 	// Cancel context
 	if v.cancel != nil {
@@ -262,11 +254,12 @@ func (v *VpnService) statsLoop() {
 	}
 }
 
-// Stats returns current network statistics
+// Stats returns current network statistics lock-free
 func (v *VpnService) Stats() client.NetworkStats {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-	return v.lastStats
+	if stats, ok := v.lastStats.Load().(client.NetworkStats); ok {
+		return stats
+	}
+	return client.NetworkStats{}
 }
 
 // GetConnectionStatus returns current connection status

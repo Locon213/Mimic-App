@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,21 +56,20 @@ type NetworkStats struct {
 
 // MimicClient is a mobile-friendly wrapper around the Mimic SDK client
 type MimicClient struct {
-	client         *client.Client
-	ctx            context.Context
-	cancel         context.CancelFunc
-	mu             sync.RWMutex
-	status         atomic.Int32
-	serverName     string
-	serverURL      string
-	mode           string // "Proxy" or "TUN"
-	statsTicker    *time.Ticker
-	statsDone      chan struct{}
-	lastStats      NetworkStats
-	callback       func(NetworkStats)
-	configMgr      *config.ConfigManager
-	configPath     string
-	proxyOptimizer *service.ProxyOptimizer
+	client      *client.Client
+	ctx         context.Context
+	cancel      context.CancelFunc
+	mu          sync.RWMutex
+	status      atomic.Int32
+	serverName  string
+	serverURL   string
+	mode        string // "Proxy" or "TUN"
+	statsTicker *time.Ticker
+	statsDone   chan struct{}
+	lastStats   NetworkStats
+	callback    func(NetworkStats)
+	configMgr   *config.ConfigManager
+	configPath  string
 }
 
 // NewMimicClient creates a new Mimic client instance
@@ -122,12 +122,16 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	cfg.DNS = "1.1.1.1:53"
 
 	// Configure buffer optimization
-	if cfg.Buffer.RelayBufferSize <= 0 {
-		cfg.Buffer.RelayBufferSize = 128 * 1024 // 128KB
+	if cfg.Buffer.RelayBufferSize <= 0 || cfg.Buffer.RelayBufferSize == 128*1024 {
+		cfg.Buffer.RelayBufferSize = 4 * 1024 * 1024 // 4MB
 	}
-	if cfg.Buffer.ReadBufferSize <= 0 {
-		cfg.Buffer.ReadBufferSize = 64 * 1024 // 64KB
+	if cfg.Buffer.ReadBufferSize <= 0 || cfg.Buffer.ReadBufferSize == 64*1024 {
+		cfg.Buffer.ReadBufferSize = 1 * 1024 * 1024 // 1MB
 	}
+	cfg.Buffer.EnableOptimizedBuffers = true
+
+	// Tune Go Garbage Collector for high-speed streaming throughput
+	debug.SetGCPercent(150)
 
 	// Create client
 	mimicClient, err := client.NewClient(cfg)
@@ -139,22 +143,8 @@ func (m *MimicClient) Connect(serverURL, mode string) error {
 	m.client = mimicClient
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 
-	// Initialize proxy optimizer for stat aggregation
-	m.proxyOptimizer = service.NewProxyOptimizer(m.ctx)
-
-	// Set traffic callback with real proxy stats aggregation
+	// Set traffic callback with real MTP stats
 	m.client.SetTrafficCallback(func(stats client.NetworkStats) {
-		// Aggregate real proxy stats from SDK
-		if m.proxyOptimizer != nil {
-			proxyStats := m.proxyOptimizer.GetProxyStats(mimicClient)
-			if proxyStats.DownloadSpeed > 0 || proxyStats.UploadSpeed > 0 ||
-				proxyStats.BytesDown > 0 || proxyStats.BytesUp > 0 {
-				stats.TotalDownload = proxyStats.BytesDown
-				stats.TotalUpload = proxyStats.BytesUp
-				stats.DownloadSpeed = proxyStats.DownloadSpeed
-				stats.UploadSpeed = proxyStats.UploadSpeed
-			}
-		}
 
 		m.mu.Lock()
 		m.lastStats = NetworkStats{
@@ -233,12 +223,6 @@ func (m *MimicClient) Disconnect() {
 
 	if m.cancel != nil {
 		m.cancel()
-	}
-
-	// Stop proxy optimizer
-	if m.proxyOptimizer != nil {
-		m.proxyOptimizer.Stop()
-		m.proxyOptimizer = nil
 	}
 
 	// Stop stats ticker
