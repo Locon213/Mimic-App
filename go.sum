@@ -2,6 +2,8 @@ github.com/Locon213/Mimic-Protocol v0.3.7 h1:viN7BISxqiNpoHvIg2IR15ar58doG/aYbuJ
 github.com/Locon213/Mimic-Protocol v0.3.7/go.mod h1:riPqnPZOJqmZHoC53R6mozXLAlLnEq2w3xVUH+Lzpd4=
 github.com/Locon213/Mimic-Protocol v0.3.8 h1:pA7V93UhGCDhbOdCxz+LkPKSW5KPyA5XRc71rp+dA/o=
 github.com/Locon213/Mimic-Protocol v0.3.8/go.mod h1:riPqnPZOJqmZHoC53R6mozXLAlLnEq2w3xVUH+Lzpd4=
+github.com/Locon213/Mimic-Protocol v0.3.9 h1:Mi1p/NV7YEwbc07dRXUH0acsg/48751Fd3qLfsIGjl0=
+github.com/Locon213/Mimic-Protocol v0.3.9/go.mod h1:riPqnPZOJqmZHoC53R6mozXLAlLnEq2w3xVUH+Lzpd4=
 github.com/ajg/form v1.5.1 h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=
 github.com/ajg/form v1.5.1/go.mod h1:uL1WgH+h2mgNtvBq0339dVnzXdBETtL2LeUXaIv25UY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
