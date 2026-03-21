@@ -137,6 +137,10 @@ jobs:
       - name: Build iOS IPA
         working-directory: mimic_app
         run: |
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' '/DEVELOPMENT_TEAM/d' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' ios/Runner.xcodeproj/project.pbxproj
           flutter build ios --release --no-codesign
           # Create IPA from the built .app bundle in a stable artifact location
           mkdir -p build/ios/ipa/Payload
@@ -240,7 +244,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev gcc mingw-w64
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev gcc mingw-w64 libayatana-appindicator3-dev
 
       - name: Enable Linux desktop support
         run: flutter config --enable-linux-desktop

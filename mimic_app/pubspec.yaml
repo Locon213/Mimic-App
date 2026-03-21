@@ -20,6 +20,7 @@ dependencies:
   
   # Icons
   font_awesome_flutter: ^11.0.0
+  fl_chart: ^0.69.0
   
   # Storage
   shared_preferences: ^2.5.4
