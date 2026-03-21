@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:auto_start_flutter/auto_start_flutter.dart';
+import 'dart:io' show Platform;
 import '../providers/settings_provider.dart';
 import '../providers/vpn_provider.dart';
 import '../models/routing_rule.dart';
@@ -7,8 +11,65 @@ import '../utils/app_theme.dart';
 import 'rules_screen.dart';
 
 /// Settings Screen - Modern minimalist settings with routing rules
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _autoConnectEnabled = false;
+  bool _autoStartAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAutoConnectPref();
+    _checkAutoStart();
+  }
+
+  Future<void> _loadAutoConnectPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoConnectEnabled = prefs.getBool('auto_connect_enabled') ?? false;
+    });
+  }
+
+  Future<void> _setAutoConnectPref(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_connect_enabled', value);
+    setState(() {
+      _autoConnectEnabled = value;
+    });
+  }
+
+  Future<void> _checkAutoStart() async {
+    try {
+      final available = await isAutoStartAvailable ?? false;
+      if (mounted) {
+        setState(() => _autoStartAvailable = available);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestAutoStart() async {
+    try {
+      await getAutoStartPermission();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open auto-start settings: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   @override
   Widget build(BuildContext context) {
@@ -43,20 +104,18 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // General Settings Section
-                _SectionTitle(title: 'General', isDark: isDark),
+                // Connection Section
+                _SectionTitle(title: 'Connection', isDark: isDark),
                 const SizedBox(height: 12),
 
                 _SettingCard(
                   icon: Icons.flash_auto_rounded,
                   title: 'Auto Connect',
-                  subtitle: 'Automatically connect to last used server',
+                  subtitle: 'Connect to last server on app start',
                   isDark: isDark,
                   trailing: Switch(
-                    value: settingsProvider.autoConnect,
-                    onChanged: (value) {
-                      settingsProvider.updateSettings(autoConnect: value);
-                    },
+                    value: _autoConnectEnabled,
+                    onChanged: (value) => _setAutoConnectPref(value),
                   ),
                 ),
 
@@ -64,29 +123,19 @@ class SettingsScreen extends StatelessWidget {
 
                 _SettingCard(
                   icon: Icons.power_rounded,
-                  title: 'Start on Boot',
-                  subtitle: 'Launch VPN when device starts',
+                  title: 'Auto Start',
+                  subtitle: _autoStartAvailable
+                      ? 'Open system auto-start settings'
+                      : 'Available on Xiaomi, Oppo, Vivo, Samsung, etc.',
                   isDark: isDark,
-                  trailing: Switch(
-                    value: settingsProvider.startOnBoot,
-                    onChanged: (value) {
-                      settingsProvider.updateSettings(startOnBoot: value);
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                _SettingCard(
-                  icon: Icons.notifications_active_rounded,
-                  title: 'Show Notification',
-                  subtitle: 'Display VPN status in notification bar',
-                  isDark: isDark,
-                  trailing: Switch(
-                    value: settingsProvider.showNotification,
-                    onChanged: (value) {
-                      settingsProvider.updateSettings(showNotification: value);
-                    },
+                  trailing: IconButton(
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    onPressed: _autoStartAvailable ? _requestAutoStart : null,
+                    style: IconButton.styleFrom(
+                      backgroundColor: _autoStartAvailable
+                          ? AppColors.primary.withOpacity(0.1)
+                          : Colors.grey.withOpacity(0.1),
+                    ),
                   ),
                 ),
 

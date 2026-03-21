@@ -171,25 +171,41 @@ class DesktopMimicClient {
 
   void _startStatsPolling() {
     _stopStatsPolling();
-    _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _statsTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       final getStatsFn = _getStats;
       if (getStatsFn == null) {
         return;
       }
 
-      final nativeStats = getStatsFn();
-      _stats = NetworkStats(
-        downloadSpeed: nativeStats.downloadSpeed,
-        uploadSpeed: nativeStats.uploadSpeed,
-        ping: nativeStats.ping,
-        totalDownload: nativeStats.totalDownload,
-        totalUpload: nativeStats.totalUpload,
-        lastUpdated: DateTime.fromMillisecondsSinceEpoch(
-          nativeStats.lastUpdated * 1000,
-          isUtc: true,
-        ).toLocal(),
-      );
-      _statsCallback?.call(_stats);
+      try {
+        final nativeStats = getStatsFn();
+        final newStats = NetworkStats(
+          downloadSpeed: nativeStats.downloadSpeed,
+          uploadSpeed: nativeStats.uploadSpeed,
+          ping: nativeStats.ping,
+          totalDownload: nativeStats.totalDownload,
+          totalUpload: nativeStats.totalUpload,
+          lastUpdated: DateTime.fromMillisecondsSinceEpoch(
+            nativeStats.lastUpdated * 1000,
+            isUtc: true,
+          ).toLocal(),
+        );
+        // Only update if stats actually changed to avoid unnecessary rebuilds
+        if (newStats.downloadSpeed != _stats.downloadSpeed ||
+            newStats.uploadSpeed != _stats.uploadSpeed ||
+            newStats.totalDownload != _stats.totalDownload ||
+            newStats.totalUpload != _stats.totalUpload ||
+            newStats.ping != _stats.ping) {
+          _stats = newStats;
+          _statsCallback?.call(_stats);
+        }
+      } catch (e) {
+        _logs.warning(
+          LogCategory.mimicProtocol,
+          'Stats poll error',
+          e.toString(),
+        );
+      }
     });
   }
 

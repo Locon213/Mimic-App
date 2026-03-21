@@ -22,8 +22,8 @@ import "C"
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	json "github.com/goccy/go-json"
 	"io"
 	"log"
 	"os"
@@ -185,34 +185,7 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	mimicClient.SetTrafficCallback(func(stats client.NetworkStats) {
-		if globalHolder != nil {
-			globalHolder.mu.Lock()
-			globalHolder.lastStats = NetworkStats{
-				DownloadSpeed: stats.DownloadSpeed,
-				UploadSpeed:   stats.UploadSpeed,
-				Ping:          stats.Ping,
-				TotalDownload: stats.TotalDownload,
-				TotalUpload:   stats.TotalUpload,
-				LastUpdated:   time.Now().Unix(),
-			}
-			globalHolder.mu.Unlock()
-		}
-	})
-
-	if err := mimicClient.Start(ctx); err != nil {
-		cancel()
-		pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start client: %v", err))
-		return C.CString(fmt.Sprintf("failed to start client: %v", err))
-	}
-
-	if err := mimicClient.StartProxies(); err != nil {
-		mimicClient.Stop()
-		cancel()
-		pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start proxies: %v", err))
-		return C.CString(fmt.Sprintf("failed to start proxies: %v", err))
-	}
-
+	// Create globalHolder BEFORE starting the client so the traffic callback can write to it
 	holderMu.Lock()
 	globalHolder = &clientHolder{
 		client:     mimicClient,
@@ -222,9 +195,46 @@ func MimicClient_Connect(serverURL, mode *C.char) *C.char {
 		mode:       cMode,
 		serverName: extractServerName(cURL),
 	}
-	globalHolder.status.Store(int32(StatusConnected))
 	holderMu.Unlock()
+
+	mimicClient.SetTrafficCallback(func(stats client.NetworkStats) {
+		holderMu.Lock()
+		defer holderMu.Unlock()
+		if globalHolder != nil {
+			globalHolder.lastStats = NetworkStats{
+				DownloadSpeed: stats.DownloadSpeed,
+				UploadSpeed:   stats.UploadSpeed,
+				Ping:          stats.Ping,
+				TotalDownload: stats.TotalDownload,
+				TotalUpload:   stats.TotalUpload,
+				LastUpdated:   time.Now().Unix(),
+			}
+		}
+	})
+
+	if err := mimicClient.Start(ctx); err != nil {
+		cancel()
+		pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start client: %v", err))
+		holderMu.Lock()
+		globalHolder = nil
+		holderMu.Unlock()
+		return C.CString(fmt.Sprintf("failed to start client: %v", err))
+	}
+
+	if err := mimicClient.StartProxies(); err != nil {
+		mimicClient.Stop()
+		cancel()
+		pushNativeLog("error", "GoBackend", fmt.Sprintf("failed to start proxies: %v", err))
+		holderMu.Lock()
+		globalHolder = nil
+		holderMu.Unlock()
+		return C.CString(fmt.Sprintf("failed to start proxies: %v", err))
+	}
+
+	holderMu.Lock()
+	globalHolder.status.Store(int32(StatusConnected))
 	pushNativeLog("info", "GoBackend", fmt.Sprintf("connected to %s in %s mode", globalHolder.serverName, cMode))
+	holderMu.Unlock()
 
 	// Start TUN mode if requested (for Desktop)
 	if strings.Contains(cMode, "TUN") {

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:yaml/yaml.dart';
 
 import '../../providers/server_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../utils/app_theme.dart';
 import '../../models/server_config.dart';
+import '../yaml_config_editor.dart';
 
 /// Server Selector - Shows current server and allows selection
 class ServerSelector extends StatelessWidget {
@@ -129,7 +131,6 @@ class ServerSelector extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final urlController = TextEditingController();
     final nameController = TextEditingController();
-    final countryController = TextEditingController();
 
     showDialog(
       context: context,
@@ -141,18 +142,16 @@ class ServerSelector extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Simple link input
                 TextField(
                   controller: urlController,
                   decoration: const InputDecoration(
                     labelText: 'Server Link',
-                    hintText: 'https://example.com/config#MimicTop\nor\nmimic://uuid@server:port?domains=example.com#Name',
+                    hintText: 'mimic://uuid@server:port#US MIMIC',
                     prefixIcon: Icon(Icons.link),
-                    helperText: 'Paste any link with #Name at the end',
+                    helperText: 'Use #CC Name for auto-flag (e.g., #US, #RU)',
                   ),
                   maxLines: 3,
                   onChanged: (value) {
-                    // Auto-extract name from #fragment
                     if (value.contains('#') && nameController.text.isEmpty) {
                       final parts = value.split('#');
                       if (parts.length > 1 && parts.last.isNotEmpty) {
@@ -167,21 +166,10 @@ class ServerSelector extends StatelessWidget {
                   controller: nameController,
                   decoration: const InputDecoration(
                     labelText: 'Server Name (optional)',
-                    hintText: 'My Server',
+                    hintText: '#US MIMIC',
                     prefixIcon: Icon(Icons.label),
-                    helperText: 'Auto-filled from link if contains #Name',
+                    helperText: 'Use #CC prefix for country flag',
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: countryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Country Code (optional)',
-                    hintText: 'US',
-                    prefixIcon: Icon(Icons.flag),
-                  ),
-                  maxLength: 2,
-                  textCapitalization: TextCapitalization.characters,
                 ),
               ],
             ),
@@ -209,7 +197,6 @@ class ServerSelector extends StatelessWidget {
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     name: nameController.text.trim(),
                     url: url,
-                    countryCode: countryController.text.trim().toUpperCase(),
                   );
 
                   context.read<ServerProvider>().addServer(server);
@@ -218,8 +205,8 @@ class ServerSelector extends StatelessWidget {
                   Navigator.pop(context);
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Server added successfully'),
+                    SnackBar(
+                      content: Text('Added: ${server.flag} ${server.displayName}'),
                       backgroundColor: AppColors.connected,
                     ),
                   );
@@ -358,7 +345,6 @@ class _ServerListSheet extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final urlController = TextEditingController();
     final nameController = TextEditingController();
-    final countryController = TextEditingController();
 
     showDialog(
       context: context,
@@ -370,18 +356,16 @@ class _ServerListSheet extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Simple link input
                 TextField(
                   controller: urlController,
                   decoration: const InputDecoration(
                     labelText: 'Server Link',
-                    hintText: 'https://example.com/config#MimicTop\nor\nmimic://uuid@server:port?domains=example.com#Name',
+                    hintText: 'mimic://uuid@server:port#US MIMIC',
                     prefixIcon: Icon(Icons.link),
-                    helperText: 'Paste any link with #Name at the end',
+                    helperText: 'Use #CC Name for auto-flag (e.g., #US, #RU)',
                   ),
                   maxLines: 3,
                   onChanged: (value) {
-                    // Auto-extract name from #fragment
                     if (value.contains('#') && nameController.text.isEmpty) {
                       final parts = value.split('#');
                       if (parts.length > 1 && parts.last.isNotEmpty) {
@@ -396,21 +380,10 @@ class _ServerListSheet extends StatelessWidget {
                   controller: nameController,
                   decoration: const InputDecoration(
                     labelText: 'Server Name (optional)',
-                    hintText: 'My Server',
+                    hintText: '#US MIMIC',
                     prefixIcon: Icon(Icons.label),
-                    helperText: 'Auto-filled from link if contains #Name',
+                    helperText: 'Use #CC prefix for country flag',
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: countryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Country Code (optional)',
-                    hintText: 'US',
-                    prefixIcon: Icon(Icons.flag),
-                  ),
-                  maxLength: 2,
-                  textCapitalization: TextCapitalization.characters,
                 ),
               ],
             ),
@@ -438,7 +411,6 @@ class _ServerListSheet extends StatelessWidget {
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     name: nameController.text.trim(),
                     url: url,
-                    countryCode: countryController.text.trim().toUpperCase(),
                   );
 
                   context.read<ServerProvider>().addServer(server);
@@ -447,8 +419,8 @@ class _ServerListSheet extends StatelessWidget {
                   Navigator.pop(context);
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Server added successfully'),
+                    SnackBar(
+                      content: Text('Added: ${server.flag} ${server.displayName}'),
                       backgroundColor: AppColors.connected,
                     ),
                   );
@@ -622,6 +594,12 @@ class _ServerListSheet extends StatelessWidget {
                               ),
                             ),
                           IconButton(
+                            onPressed: () => _editServerConfig(context, server),
+                            icon: const Icon(Icons.edit_outlined),
+                            color: isDark ? AppColors.textDarkSecondary : AppColors.textSecondary,
+                            tooltip: 'Edit config',
+                          ),
+                          IconButton(
                             onPressed: () => _confirmDelete(context, server),
                             icon: const Icon(Icons.delete_outline_rounded),
                             color: AppColors.error,
@@ -667,5 +645,59 @@ class _ServerListSheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _editServerConfig(BuildContext context, ServerConfig server) {
+    Navigator.pop(context); // Close the bottom sheet first
+
+    final yamlContent = _serverToYaml(server);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => YamlConfigEditor(
+          title: 'Edit: ${server.displayName}',
+          initialContent: yamlContent,
+          onSave: (content) {
+            final updated = _yamlToServer(content, server);
+            if (updated != null) {
+              context.read<ServerProvider>().updateServer(updated);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  String _serverToYaml(ServerConfig server) {
+    final buffer = StringBuffer();
+    buffer.writeln('url: ${server.url}');
+    buffer.writeln('name: ${server.displayName}');
+    if (server.countryCode.isNotEmpty) {
+      buffer.writeln('country_code: ${server.countryCode}');
+    }
+    if (server.domains.isNotEmpty) {
+      buffer.writeln('domains: ${server.domains}');
+    }
+    return buffer.toString();
+  }
+
+  ServerConfig? _yamlToServer(String yaml, ServerConfig original) {
+    try {
+      final doc = loadYaml(yaml);
+      if (doc is! YamlMap) return null;
+
+      return ServerConfig(
+        id: original.id,
+        name: doc['name']?.toString() ?? original.name,
+        url: doc['url']?.toString() ?? original.url,
+        countryCode: doc['country_code']?.toString() ?? original.countryCode,
+        domains: doc['domains']?.toString() ?? original.domains,
+        createdAt: original.createdAt,
+        lastUsed: original.lastUsed,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 }

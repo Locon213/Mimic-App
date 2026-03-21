@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/vpn_provider.dart';
 import '../providers/server_provider.dart';
@@ -25,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  bool _autoConnectAttempted = false;
 
   @override
   void initState() {
@@ -34,10 +36,50 @@ class _HomeScreenState extends State<HomeScreen>
       duration: const Duration(milliseconds: 2000),
     );
 
-    // Load saved servers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ServerProvider>().loadServers();
+      _attemptAutoConnect();
     });
+  }
+
+  Future<void> _attemptAutoConnect() async {
+    if (_autoConnectAttempted) return;
+    _autoConnectAttempted = true;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final autoConnect = prefs.getBool('auto_connect_enabled') ?? false;
+      if (!autoConnect) return;
+
+      final lastServerId = prefs.getString('last_connected_server_id');
+      if (lastServerId == null) return;
+
+      // Wait a bit for servers to load
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+
+      final serverProvider = context.read<ServerProvider>();
+      final vpnProvider = context.read<VpnProvider>();
+
+      if (vpnProvider.isConnected || vpnProvider.isConnecting) return;
+
+      final server = serverProvider.servers.where(
+        (s) => s.id == lastServerId,
+      ).firstOrNull;
+
+      if (server != null) {
+        serverProvider.selectServer(server);
+        final mode = prefs.getString('last_connected_mode') ?? 'TUN';
+        try {
+          await vpnProvider.connect(server, mode: mode);
+        } catch (e) {
+          // Auto-connect failed silently
+        }
+      }
+    } catch (e) {
+      // Auto-connect failed silently
+    }
   }
 
   @override
@@ -94,26 +136,28 @@ class _HomeScreenState extends State<HomeScreen>
 
                       const SizedBox(height: 24),
 
-                      // Server Selector - Always visible
+                      // Server Selector
                       ServerSelector()
                           .animate()
                           .fadeIn(delay: 200.ms, duration: 600.ms)
                           .slideY(begin: 0.1, end: 0),
 
-                      const SizedBox(height: 16),
-
                       // Mode Selector (Desktop only)
                       Consumer<VpnProvider>(
                         builder: (context, vpnProvider, child) {
                           if (vpnProvider.availableModes.length > 1) {
-                            return ModeSelector()
-                                .animate()
-                                .fadeIn(delay: 300.ms, duration: 600.ms)
-                                .slideY(begin: 0.1, end: 0);
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: ModeSelector()
+                                  .animate()
+                                  .fadeIn(delay: 300.ms, duration: 600.ms),
+                            );
                           }
                           return const SizedBox.shrink();
                         },
                       ),
+
+                      const SizedBox(height: 16),
 
                       // Stats Card - Only when connected
                       Consumer<VpnProvider>(
@@ -277,6 +321,11 @@ class _HomeScreenState extends State<HomeScreen>
         serverProvider.selectedServer!,
         mode: vpnProvider.mode,
       );
+
+      // Save last connected server for auto-connect
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_connected_server_id', serverProvider.selectedServer!.id);
+      await prefs.setString('last_connected_mode', vpnProvider.mode);
     } catch (e) {
       if (!mounted) {
         return;
@@ -301,13 +350,6 @@ class _HomeScreenState extends State<HomeScreen>
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Open server selector
-            },
-            child: const Text('Add Server'),
           ),
         ],
       ),

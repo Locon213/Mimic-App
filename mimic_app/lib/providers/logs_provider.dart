@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/log_entry.dart';
+import '../services/persistent_log_storage.dart';
 
 class LogsProvider extends ChangeNotifier {
   LogsProvider._();
@@ -26,19 +27,22 @@ class LogsProvider extends ChangeNotifier {
     required String message,
     LogLevel level = LogLevel.info,
   }) {
-    _entries.add(
-      LogEntry(
-        timestamp: DateTime.now(),
-        category: category,
-        level: level,
-        title: title,
-        message: message,
-      ),
+    final entry = LogEntry(
+      timestamp: DateTime.now(),
+      category: category,
+      level: level,
+      title: title,
+      message: message,
     );
+
+    _entries.add(entry);
 
     if (_entries.length > _maxEntries) {
       _entries.removeRange(0, _entries.length - _maxEntries);
     }
+
+    // Persist to disk (fire and forget)
+    PersistentLogStorage.instance.write(entry);
 
     notifyListeners();
   }
@@ -63,5 +67,20 @@ class LogsProvider extends ChangeNotifier {
   void clear() {
     _entries.clear();
     notifyListeners();
+  }
+
+  /// Load stored logs from disk for a specific date
+  Future<List<LogEntry>> loadStoredLogs(DateTime date) async {
+    return PersistentLogStorage.instance.readForDate(date);
+  }
+
+  /// Get available log dates
+  Future<List<DateTime>> getAvailableLogDates() async {
+    return PersistentLogStorage.instance.getAvailableDates();
+  }
+
+  /// Clear all stored logs from disk
+  Future<void> clearStoredLogs() async {
+    await PersistentLogStorage.instance.clearAll();
   }
 }

@@ -8,6 +8,7 @@ import '../models/server_config.dart';
 import 'logs_provider.dart';
 import '../services/android_vpn_client.dart';
 import '../services/desktop_mimic_client.dart';
+import '../services/system_tray_service.dart';
 
 /// VPN Provider - Manages VPN connection state and statistics
 class VpnProvider extends ChangeNotifier {
@@ -93,6 +94,9 @@ class VpnProvider extends ChangeNotifier {
         notifyListeners();
       });
 
+      // Update system tray
+      SystemTrayService.instance.updateConnectionStatus(true);
+
       notifyListeners();
 
     } catch (e) {
@@ -121,6 +125,10 @@ class VpnProvider extends ChangeNotifier {
       _status = ConnectionStatus.disconnected;
       _stats = models.NetworkStats();
       _currentServer = null;
+
+      // Update system tray
+      SystemTrayService.instance.updateConnectionStatus(false);
+
       _logs.info(
         LogCategory.vpn,
         'Disconnected',

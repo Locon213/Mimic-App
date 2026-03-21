@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	github.com/Locon213/Mimic-Protocol v0.3.7
+	github.com/goccy/go-json v0.10.6
 	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.18.5
 	github.com/xjasonlyu/tun2socks/v2 v2.6.0

@@ -225,7 +225,7 @@ class AndroidVpnClient {
   /// Poll stats every second
   void _startStatsPolling() {
     _stopStatsPolling();
-    _statsTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    _statsTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
       if (_status != 2) {
         timer.cancel();
         return;
@@ -234,20 +234,28 @@ class AndroidVpnClient {
       try {
         final result = await _channel.invokeMapMethod<String, dynamic>('getStats');
         if (result != null) {
-          _stats = NetworkStats(
-            downloadSpeed: result['downloadSpeed'] as int? ?? 0,
-            uploadSpeed: result['uploadSpeed'] as int? ?? 0,
-            ping: result['ping'] as int? ?? 0,
-            totalDownload: result['totalDownload'] as int? ?? 0,
-            totalUpload: result['totalUpload'] as int? ?? 0,
+          final newStats = NetworkStats(
+            downloadSpeed: (result['downloadSpeed'] as num?)?.toInt() ?? 0,
+            uploadSpeed: (result['uploadSpeed'] as num?)?.toInt() ?? 0,
+            ping: (result['ping'] as num?)?.toInt() ?? 0,
+            totalDownload: (result['totalDownload'] as num?)?.toInt() ?? 0,
+            totalUpload: (result['totalUpload'] as num?)?.toInt() ?? 0,
           );
-          _statsCallback?.call(_stats);
+          // Only update if stats changed
+          if (newStats.downloadSpeed != _stats.downloadSpeed ||
+              newStats.uploadSpeed != _stats.uploadSpeed ||
+              newStats.totalDownload != _stats.totalDownload ||
+              newStats.totalUpload != _stats.totalUpload ||
+              newStats.ping != _stats.ping) {
+            _stats = newStats;
+            _statsCallback?.call(_stats);
+          }
           return;
         }
       } catch (e) {
         _logs.warning(
           LogCategory.mimicProtocol,
-          'Native stats fallback',
+          'Native stats error',
           e.toString(),
         );
       }

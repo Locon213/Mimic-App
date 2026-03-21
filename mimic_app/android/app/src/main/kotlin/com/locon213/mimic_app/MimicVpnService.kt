@@ -126,7 +126,7 @@ class MimicVpnService : VpnService() {
                 currentServerUrl = serverUrl
                 currentServerName = serverName
                 currentMode = mode
-                
+
                 // Check notification permission for Android 13+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     if (!hasNotificationPermission(this)) {
@@ -134,14 +134,22 @@ class MimicVpnService : VpnService() {
                         NativeLogBridge.warning(TAG, "Notification permission not granted")
                     }
                 }
-                
+
                 try {
                     startForeground(NOTIFICATION_ID, createNotification("Connecting...", serverName))
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start foreground: ${e.message}", e)
                     NativeLogBridge.error(TAG, "Failed to start foreground: ${e.message}")
+                    sendBroadcast(
+                        Intent(ACTION_VPN_ERROR).apply {
+                            setPackage(packageName)
+                            putExtra("error", "Failed to start foreground service: ${e.message}")
+                        }
+                    )
+                    stopSelf()
+                    return START_NOT_STICKY
                 }
-                
+
                 connectExecutor.execute {
                     connect(serverUrl, serverName, mode)
                 }
@@ -295,9 +303,15 @@ class MimicVpnService : VpnService() {
             Log.d(TAG, "Setting up VPN interface for: $serverUrl, mode: $mode")
             NativeLogBridge.info(TAG, "Setting up VPN interface for $serverName in $mode mode")
 
-            // Initialize Go Mobile client
-            mimicClient = MimicClient()
-            
+            // Initialize Go Mobile client with error handling
+            try {
+                mimicClient = MimicClient()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create Go Mobile client: ${e.message}", e)
+                NativeLogBridge.error(TAG, "Failed to create Go Mobile client: ${e.message}")
+                throw IllegalStateException("VPN library not available. Please rebuild the app with Go Mobile bindings.", e)
+            }
+
             // Setup VPN interface FIRST (required for TUN mode)
             val builder = Builder()
             builder.addAddress(VPN_ADDRESS, 32)
@@ -330,30 +344,30 @@ class MimicVpnService : VpnService() {
                     try {
                         val currentFd = vpnInterface?.fileDescriptor
                             ?: throw IllegalStateException("VPN interface file descriptor is null after connect")
-                        
+
                         val duplicatedFd = ParcelFileDescriptor.dup(currentFd)
                             ?: throw IllegalStateException("Failed to duplicate VPN file descriptor")
-                        
+
                         vpnFdForCleanup = duplicatedFd
-                        
+
                         val tunFd = duplicatedFd.detachFd()
                         if (tunFd <= 0) {
                             throw IllegalStateException("Invalid TUN file descriptor: $tunFd")
                         }
-                        
+
                         mimicClient?.startTun(tunFd.toLong(), VPN_MTU.toLong())
                         vpnFdForCleanup = null // fd ownership transferred to tun2socks
                         NativeLogBridge.info(TAG, "tun2socks attached to Android VpnService fd")
                     } catch (tunException: Exception) {
                         Log.e(TAG, "Failed to start TUN mode: ${tunException.message}", tunException)
                         NativeLogBridge.error(TAG, "Failed to start TUN mode: ${tunException.message}")
-                        
+
                         // Cleanup duplicated fd if still held
                         vpnFdForCleanup?.let { fd ->
                             try { fd.close() } catch (_: Exception) {}
                         }
                         vpnFdForCleanup = null
-                        
+
                         // Fall back to proxy mode
                         Log.w(TAG, "Falling back to proxy-only mode (TUN unavailable)")
                         NativeLogBridge.warning(TAG, "Falling back to proxy-only mode")
@@ -395,13 +409,16 @@ class MimicVpnService : VpnService() {
         } catch (e: Exception) {
             Log.e(TAG, "Connection failed: ${e.message}", e)
             NativeLogBridge.error(TAG, "Connection failed: ${e.message}")
-            
+
             // Cleanup duplicated fd on error
             vpnFdForCleanup?.let { fd ->
                 try { fd.close() } catch (_: Exception) {}
             }
-            
-            updateNotification("Connection failed: ${e.message}")
+
+            try {
+                updateNotification("Connection failed: ${e.message}")
+            } catch (_: Exception) {}
+
             disconnect()
 
             sendBroadcast(
