@@ -23,7 +23,7 @@ dependencies:
   fl_chart: ^0.69.0
   
   # Storage
-  shared_preferences: ^2.5.4
+  shared_preferences: ^2.5.5
   path_provider: ^2.1.1
   
   # Utilities
